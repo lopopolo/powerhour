@@ -48,8 +48,7 @@ end
 if options[:dir].nil?
   list_of_files = %x[grep "Location" "#{ITUNES_XML}"].split("\n")
 else
-  puts options[:dir]
-  list_of_files = %x[find "#{options[:dir]}" -type f].split("\n")
+  list_of_files = %x[find "#{options[:dir].chomp("/")}" -type f].split("\n")
 end
 options[:songs].times do |minute|
   begin

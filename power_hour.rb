@@ -25,7 +25,7 @@ opt = OptionParser.new do |opts|
   end
   opts.on("-h", "--help", "Display this screen") do
     puts opts
-    abort
+    exit
   end
 end
 opt.parse!

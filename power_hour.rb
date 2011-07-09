@@ -34,7 +34,7 @@ opt = OptionParser.new do |opts|
       "Use DIR of music files instead of the iTunes XML") do |dir|
     options[:dir] = dir
   end
-  options[:command] = %[which afplay].empty? ? nil : "afplay -t <duration> <file>"
+  options[:command] = %x[which afplay].empty? ? nil : "afplay -t <duration> <file>"
   opts.on("-c", "--command \"COMMAND -x <duration> <file>\"", \
       "Use COMMAND to play files. The \"<duration>\" and \"<file>\" placeholders must be specified.") do |command|
     abort "COMMAND requires \"<duration>\" and \"<file>\" placeholders" unless command =~ /<duration>/ && command =~ /<file>/

@@ -1,9 +1,15 @@
 #!/usr/bin/env ruby
 
+# Command line powerhour Utility.
+# This was originially designed for use on a Mac, so the default options
+# reflect that.
+# The script is portable across platforms provided you use the -D flag
+# and can provide a command to play audio files
+# example:
+#   $ ./power_hour.rb -n 20 -d 2 -D ~/Downloads/music/ -c "afplay <file> -t <duration>"
+
 require "optparse"
 require "URI"
-
-ITUNES_XML = "$HOME/Music/iTunes/iTunes Music Library.xml"
 
 options = {}
 opt = OptionParser.new do |opts|
@@ -12,6 +18,11 @@ opt = OptionParser.new do |opts|
   opts.on("-n", "--number-of-songs NUMBER", Integer,  \
       "Number of songs in the power hour (default 60)") do |songs|
     options[:songs] = songs
+  end
+  options[:xml] = "$HOME/Music/iTunes/iTunes Music Library.xml"
+  opts.on("-x", "--xml", \
+      "Location of iTunes XML (default #{options[:xml]}") do |xml|
+    options[:xml] = xml
   end
   options[:duration] = 60
   opts.on("-d", "--duration SECONDS", Integer, \
@@ -22,6 +33,12 @@ opt = OptionParser.new do |opts|
   opts.on("-D", "--directory DIR", \
       "Use DIR of music files instead of the iTunes XML") do |dir|
     options[:dir] = dir
+  end
+  options[:command] = %[which afplay].empty? ? nil : "afplay -t <duration> <file>"
+  opts.on("-c", "--command \"COMMAND -x <duration> <file>\"", \
+      "Use COMMAND to play files. The \"<duration>\" and \"<file>\" placeholders must be specified.") do |command|
+    abort "COMMAND requires \"<duration>\" and \"<file>\" placeholders" unless command =~ /<duration>/ && command =~ /<file>/
+    options[:command] = command
   end
   opts.on("-h", "--help", "Display this screen") do
     puts opts
@@ -43,10 +60,14 @@ def get_random_file(list)
   list[rand(list.length)]
 end
 
+abort "Must specify COMMAND" if options[:command].nil?
 # find all of the paths in source
 # this assumes there are only audio files in the source
 if options[:dir].nil?
-  list_of_files = %x[grep "Location" "#{ITUNES_XML}"].split("\n")
+  list_of_files = \
+      %x[grep "Location" "#{options[:xml]}"].split("\n").map do |line|
+    decode($1) if /<string>file:\/\/localhost(.+)<\/string>/ =~ line
+  end
 else
   list_of_files = %x[find "#{options[:dir].chomp("/")}" -type f].split("\n")
 end
@@ -54,6 +75,8 @@ options[:songs].times do |minute|
   begin
     candidate = get_random_file(list_of_files)
     puts "##{minute}: Playing #{candidate}"
-    %x[afplay "#{candidate}" -t #{options[:duration]}]
+    %x[#{options[:command].gsub(
+        /<duration>/, "#{options[:duration]}").gsub(
+        /<file>/, "\"#{candidate}\"")}]
   end while $? != 0
 end

@@ -54,15 +54,13 @@ def decode string
   URI::Escape::decode(string)
 end
 
-def get_random_file(list)
-  return decode($1) if /<string>file:\/\/localhost(.+)<\/string>/ =~ \
-    list[rand(list.length)]
-  list[rand(list.length)]
+def rand(list, index)
+  list.shuffle! if index % list.length == 0
+  list[index % list.length]
 end
 
 abort "Must specify COMMAND" if options[:command].nil?
 # find all of the paths in source
-# this assumes there are only audio files in the source
 if options[:dir].nil?
   list_of_files = \
       %x[grep "Location" "#{options[:xml]}"].split("\n").map do |line|
@@ -71,12 +69,19 @@ if options[:dir].nil?
 else
   list_of_files = %x[find "#{options[:dir].chomp("/")}" -type f].split("\n")
 end
+index = 0
 options[:songs].times do |minute|
   begin
-    candidate = get_random_file(list_of_files)
+    abort "No valid songs" if list_of_files.length < 1
+    candidate = rand(list_of_files, index)
     puts "##{minute}: Playing #{candidate}"
     %x[#{options[:command].gsub(
         /<duration>/, "#{options[:duration]}").gsub(
-        /<file>/, "\"#{candidate}\"")}]
+        /<file>/, "\"#{candidate}\"")} 2> /dev/null]
+    if $? != 0
+      list_of_files.delete_at(index)
+    else
+      index = (index + 1) % list_of_files.length
+    end
   end while $? != 0
 end

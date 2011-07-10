@@ -20,7 +20,7 @@ opt = OptionParser.new do |opts|
     options[:songs] = songs
   end
   options[:xml] = "$HOME/Music/iTunes/iTunes Music Library.xml"
-  opts.on("-x", "--xml", \
+  opts.on("-x", "--xml FILE", \
       "Location of iTunes XML (default #{options[:xml]}") do |xml|
     options[:xml] = xml
   end

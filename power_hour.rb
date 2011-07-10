@@ -9,6 +9,7 @@
 #   $ ./power_hour.rb -n 20 -d 2 -D ~/Downloads/music/ -c "afplay <file> -t <duration>"
 
 require "optparse"
+require "timeout"
 require "URI"
 
 options = {}
@@ -69,19 +70,72 @@ if options[:dir].nil?
 else
   list_of_files = %x[find "#{options[:dir].chomp("/")}" -type f].split("\n")
 end
-index = 0
-options[:songs].times do |minute|
-  begin
-    abort "No valid songs" if list_of_files.length < 1
-    candidate = rand(list_of_files, index)
-    puts "##{minute}: Playing #{candidate}"
-    %x[#{options[:command].gsub(
-        /<duration>/, "#{options[:duration]}").gsub(
-        /<file>/, "\"#{candidate}\"")} 2> /dev/null]
-    if $? != 0
-      list_of_files.delete_at(index)
-    else
-      index = (index + 1) % list_of_files.length
+
+def create_music_thread(options, list_of_files)
+  return Thread.new do
+    index = 0
+    terminate = false
+    trap("SIGTERM") {
+      terminate = true
+    }
+    write(1,0, "#{options[:songs]}")
+    options[:songs].times do |minute|
+      begin
+        abort "No valid songs" if list_of_files.length < 1
+        candidate = rand(list_of_files, index)
+        clear
+        write(0,0, "Minute #{minute} of #{options[:songs]}")
+        write(1,0, "Playing #{candidate}")
+        write(PROGRESS_LINE+1,0, "Enter q to quit")
+        open("|-", "r+") do |child|
+          if child # this is the parent process
+            begin
+              start = Time.now
+              response_code = nil
+              until response_code || terminate
+                delta = Time.now - start
+                progress(Float(delta)/options[:duration], \
+                         delta, options[:duration])
+                begin
+                  response_code = Timeout.timeout(0.01*options[:duration]) {
+                    child.readlines
+                  }
+                rescue Timeout::Error
+                  # do nothing
+                end
+              end
+            ensure
+              # no need to call child.close because we already
+              # wait for the process to end. Otherwise, we are
+              # terminating anyway
+              Process.kill("TERM", child.pid)
+              Process.exit if terminate
+            end
+          else
+           exec("#{options[:command].gsub(
+              /<duration>/, "#{options[:duration]}").gsub(
+              /<file>/, "\"#{candidate}\"")} 2> /dev/null")
+          end
+        end
+        if $? != 0
+          list_of_files.delete_at(index)
+        else
+          index = (index + 1) % list_of_files.length
+        end
+      end while $? != 0
     end
-  end while $? != 0
+  end
+end
+
+init_screen do
+  ph = create_music_thread(options, list_of_files)
+  write(0,0, "Welcome to the ruby power hour")
+  loop do
+    case Curses.getch 
+    when ?q, ?Q :
+      #ph.exit
+      Process.kill("SIGTERM", 0)
+      break
+    end
+  end
 end

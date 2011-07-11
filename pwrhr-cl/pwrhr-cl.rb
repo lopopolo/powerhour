@@ -128,15 +128,15 @@ PROGRESS_WIDTH = 50
 def write(line, col, text)
   Curses.setpos(line,col)
   Curses.addstr(text)
-  Curses.refresh
 end
 
 def update_screen_for_new_minute(minute, num_songs, playing)
   Curses.clear
   write(0,0, "Welcome to pwrhr-cl, serving all of your power hour needs")
-  write(1,0, "Minute #{minute} of #{num_songs}")
+  write(1,0, "Song #{minute} of #{num_songs}")
   write(2,0, "Playing #{playing}")
   write(PROGRESS_LINE+1,0, "Enter q to quit")
+  Curses.refresh
 end
 
 def init_screen
@@ -157,11 +157,12 @@ def progress(percent, time=nil, total_time=nil)
   end
   bar = "|#{bar}|"
   if !time.nil? && !total_time.nil?
-    bar = "#{bar}%3.2fs elapsed / #{total_time}s" % time
+    bar = "#{bar}[%.2fs elapsed / #{total_time}s]" % time
   elsif !time.nil?
-    bar = "#{bar}%3.2f s elapsed" % time
+    bar = "#{bar}[%.2f s elapsed]" % time
   end
   write(PROGRESS_LINE,0, "#{bar}")
+  Curses.refresh
 end
 
 init_screen do

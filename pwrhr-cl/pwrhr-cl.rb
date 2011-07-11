@@ -36,7 +36,7 @@ opt = OptionParser.new do |opts|
     options[:dir] = dir
   end
   options[:command] = %x[which afplay].empty? ? nil : "afplay -t <duration> <file>"
-  opts.on("-c", "--command \"COMMAND -x <duration> <file>\"", \
+  opts.on("-c", "--command \"COMMAND --some-switch <duration> <file>\"", \
       "Use COMMAND to play files. The \"<duration>\" and \"<file>\" placeholders must be specified.") do |command|
     abort "COMMAND requires \"<duration>\" and \"<file>\" placeholders" unless command =~ /<duration>/ && command =~ /<file>/
     options[:command] = command

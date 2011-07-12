@@ -54,33 +54,32 @@ def rand(list, index)
   list[index % list.length]
 end
 
-def build_file_list options
+def build_file_list(xml, dir)
   # find all of the paths in source
-  if options[:dir].nil?
+  if dir.nil?
     list_of_files = \
-        %x[grep "Location" "#{options[:xml]}"].split("\n").map do |line|
+        %x[grep "Location" "#{xml}"].split("\n").map do |line|
       decode($1) if /<string>file:\/\/localhost(.+)<\/string>/ =~ line
     end.compact
   else
-    list_of_files = %x[find "#{options[:dir].chomp("/")}" -type f].split("\n")
+    list_of_files = %x[find "#{dir.chomp("/")}" -type f].split("\n")
   end
   abort "Unable to build file list" if $? != 0
   list_of_files
 end
 
-def create_music_thread options
+def create_music_thread(num_songs, duration, command, list_of_files)
   return Thread.new do
     index = 0
     terminate = false
     trap("SIGTERM") {
       terminate = true
     }
-    list_of_files = build_file_list options
-    options[:songs].times do |minute|
+    num_songs.times do |minute|
       begin
         abort "No valid songs" if list_of_files.length < 1
         candidate = rand(list_of_files, index)
-        update_screen_for_new_minute(minute, options[:songs], candidate)
+        update_screen_for_new_minute(minute, num_songs, candidate)
         open("|-", "r+") do |child|
           if child # this is the parent process
             begin
@@ -88,10 +87,11 @@ def create_music_thread options
               response_code = nil
               until response_code || terminate
                 delta = Time.now - start
-                progress(Float(delta)/options[:duration], \
-                         delta, options[:duration])
+                progress(delta, duration, PROGRESS_LINE)
+                progress(minute * duration + delta, num_songs * duration,
+                        PROGRESS_LINE+1, true)
                 begin
-                  response_code = Timeout.timeout(0.01*options[:duration]) {
+                  response_code = Timeout.timeout(0.01 * duration) {
                     child.readlines
                   }
                 rescue Timeout::Error
@@ -106,9 +106,9 @@ def create_music_thread options
               Process.exit if terminate
             end
           else
-           exec("#{options[:command].gsub(
-              /<duration>/, "#{options[:duration]}").gsub(
-              /<file>/, "\"#{candidate}\"")} 2> /dev/null")
+           exec("#{command.gsub(
+              /<duration>/, "#{duration}").gsub(
+              /<file>/, "\"#{candidate}\"")} &> /dev/null")
           end
         end
         if $? != 0
@@ -124,6 +124,7 @@ end
 # curses stuff
 PROGRESS_LINE = 10
 PROGRESS_WIDTH = 50
+INPUT_INST_LINE = PROGRESS_LINE + 2
 
 def write(line, col, text)
   Curses.setpos(line,col)
@@ -135,7 +136,7 @@ def update_screen_for_new_minute(minute, num_songs, playing)
   write(0,0, "Welcome to pwrhr-cl, serving all of your power hour needs")
   write(1,0, "Song #{minute} of #{num_songs}")
   write(2,0, "Playing #{playing}")
-  write(PROGRESS_LINE+1,0, "Enter q to quit")
+  write(INPUT_INST_LINE,0, "Enter q to quit")
   Curses.refresh
 end
 
@@ -149,24 +150,39 @@ def init_screen
   end
 end
 
-def progress(percent, time=nil, total_time=nil)
+def format_time seconds
+  time = []
+  int_seconds = Integer(seconds)
+  hours = int_seconds / 3600
+  minutes = (int_seconds / 60) % 60
+  sec = seconds % 60
+  time << "#{hours}h" if hours > 0
+  time << "#{minutes}m" if minutes > 0
+  time << "%.2fs" % sec
+  return time.join(" ")
+end
+
+def progress(time, total_time, output_line, overall=false)
   bar = ""
-  PROGRESS_WIDTH.times do |i|
-    bar = "#{bar}=" if i <= percent * PROGRESS_WIDTH
-    bar = "#{bar} " if i > percent * PROGRESS_WIDTH
+  if total_time != 0
+    percent = Float(time)/total_time
+    PROGRESS_WIDTH.times do |i|
+      bar = "#{bar}=" if i <= percent * PROGRESS_WIDTH
+      bar = "#{bar} " if i > percent * PROGRESS_WIDTH
+    end
+    bar = "|#{bar}|"
+    bar = "#{bar}[#{format_time time} elapsed / #{format_time total_time}]"
+  elsif !overall
+    bar = "[#{format_time time} elapsed]"
   end
-  bar = "|#{bar}|"
-  if !time.nil? && !total_time.nil?
-    bar = "#{bar}[%.2fs elapsed / #{total_time}s]" % time
-  elsif !time.nil?
-    bar = "#{bar}[%.2f s elapsed]" % time
-  end
-  write(PROGRESS_LINE,0, "#{bar}")
+  write(output_line,0, bar)
   Curses.refresh
 end
 
 init_screen do
-  ph = create_music_thread options
+  song_list = build_file_list(options[:xml], options[:dir])
+  ph = create_music_thread(options[:songs], options[:duration],
+                           options[:command], song_list)
   loop do
     case Curses.getch 
     when ?q, ?Q :

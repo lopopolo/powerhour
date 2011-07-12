@@ -9,8 +9,8 @@ options = {}
 opt = OptionParser.new do |opts|
   opts.banner = "Usage: #{$0} [options]\n\n"
   options[:songs] = 60
-  opts.on("-n", "--number-of-songs NUMBER", Integer,  \
-      "Number of songs in the power hour (default 60)") do |songs|
+  opts.on("-n", "--number-of-songs NUMBER", Integer,
+          "Number of songs in the power hour (default 60)") do |songs|
     options[:songs] = songs
   end
   options[:xml] = "$HOME/Music/iTunes/iTunes Music Library.xml"
@@ -19,19 +19,22 @@ opt = OptionParser.new do |opts|
     options[:xml] = xml
   end
   options[:duration] = 60
-  opts.on("-d", "--duration SECONDS", Integer, \
-      "Duration of each song in seconds (default 60)") do |duration|
+  opts.on("-d", "--duration SECONDS", Integer,
+          "Duration of each song in seconds (default 60)") do |duration|
     options[:duration] = duration
   end
   options[:dir] = nil
-  opts.on("-D", "--directory DIR", \
-      "Use DIR of music files instead of the iTunes XML") do |dir|
+  opts.on("-D", "--directory DIR", 
+          "Use DIR of music files instead of the iTunes XML") do |dir|
     options[:dir] = dir
   end
-  options[:command] = %x[which afplay].empty? ? nil : "afplay -t <duration> <file>"
-  opts.on("-c", "--command \"COMMAND --some-switch <duration> <file>\"", \
-      "Use COMMAND to play files. The \"<duration>\" and \"<file>\" placeholders must be specified.") do |command|
-    abort "COMMAND requires \"<duration>\" and \"<file>\" placeholders" unless command =~ /<duration>/ && command =~ /<file>/
+  options[:command] = %x[which afplay].empty? ? 
+    nil : "afplay -t <duration> <file>"
+  opts.on("-c", "--command \"COMMAND --some-switch <duration> <file>\"", 
+          "Use COMMAND to play files. The \"<duration>\" and \"<file>\" " +
+          "placeholders must be specified.") do |command|
+    abort "COMMAND requires \"<duration>\" and \"<file>\" placeholders" \
+      unless command =~ /<duration>/ && command =~ /<file>/
     options[:command] = command
   end
   opts.on("-h", "--help", "Display this screen") do

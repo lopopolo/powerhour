@@ -49,8 +49,8 @@ def decode string
   URI::Escape::decode(string)
 end
 
-def rand(list, index)
-  list.shuffle! if index % list.length == 0
+def rand(list, index, shuffle)
+  list.shuffle! if index % list.length == 0 && shuffle
   list[index % list.length]
 end
 
@@ -70,28 +70,48 @@ end
 
 def create_music_thread(num_songs, duration, command, list_of_files)
   return Thread.new do
-    index = 0
     terminate = false
     trap("SIGTERM") {
       terminate = true
     }
-    num_songs.times do |minute|
+    skip = false
+    trap("HUP") {
+      skip = true
+    }
+    playing = true
+    trap("INT") {
+      playing = !playing
+      write(STATE_LINE,0, "PAUSED") if !playing
+      write(STATE_LINE,0, "      ") if playing
+      Curses.refresh
+    }
+    index = 0
+    minute = 0
+    while minute < num_songs do
+      # spin if paused
+      were_paused = false
+      until playing
+        sleep 0.1
+        were_paused = true
+      end
       begin
         abort "No valid songs" if list_of_files.length < 1
-        candidate = rand(list_of_files, index)
+        candidate = rand(list_of_files, index, !were_paused)
         update_screen_for_new_minute(minute, num_songs, candidate)
         open("|-", "r+") do |child|
           if child # this is the parent process
             begin
               start = Time.now
               response_code = nil
-              until response_code || terminate
+              until response_code || terminate || skip || !playing
                 delta = Time.now - start
                 progress(delta, duration, PROGRESS_LINE)
                 progress(minute * duration + delta, num_songs * duration,
                         PROGRESS_LINE+1, true)
+                to = 0.01 * duration
+                to = 0.1 if to == 0
                 begin
-                  response_code = Timeout.timeout(0.01 * duration) {
+                  response_code = Timeout.timeout(to) {
                     child.readlines
                   }
                 rescue Timeout::Error
@@ -111,12 +131,14 @@ def create_music_thread(num_songs, duration, command, list_of_files)
               /<file>/, "\"#{candidate}\"")} &> /dev/null")
           end
         end
-        if $? != 0
+        if $? != 0 && playing
           list_of_files.delete_at(index)
-        else
+        elsif playing
           index = (index + 1) % list_of_files.length
         end
-      end while $? != 0
+      end while $? != 0 && !skip && playing
+      minute += 1 if !skip && playing
+      skip = false
     end
   end
 end
@@ -125,6 +147,7 @@ end
 PROGRESS_LINE = 10
 PROGRESS_WIDTH = 50
 INPUT_INST_LINE = PROGRESS_LINE + 2
+STATE_LINE = INPUT_INST_LINE + 1
 
 def write(line, col, text)
   Curses.setpos(line,col)
@@ -136,13 +159,14 @@ def update_screen_for_new_minute(minute, num_songs, playing)
   write(0,0, "Welcome to pwrhr-cl, serving all of your power hour needs")
   write(1,0, "Song #{minute} of #{num_songs}")
   write(2,0, "Playing #{playing}")
-  write(INPUT_INST_LINE,0, "Enter q to quit")
+  write(INPUT_INST_LINE,0, "Enter q to quit, s to skip song, p to toggle play/pause")
   Curses.refresh
 end
 
 def init_screen
   Curses.init_screen
   Curses.noecho
+  Curses.stdscr.keypad(true) # enable arrow keys
   begin
     yield
   ensure
@@ -158,7 +182,7 @@ def format_time seconds
   sec = seconds % 60
   time << "#{hours}h" if hours > 0
   time << "#{minutes}m" if minutes > 0
-  time << "%.2fs" % sec
+  time << "%.2fs" % sec if sec > 0
   return time.join(" ")
 end
 
@@ -184,10 +208,14 @@ init_screen do
   ph = create_music_thread(options[:songs], options[:duration],
                            options[:command], song_list)
   loop do
-    case Curses.getch 
+    case Curses.getch
     when ?q, ?Q :
       Process.kill("SIGTERM", 0)
       break
+    when Curses::Key::RIGHT, ?s, ?S :
+      Process.kill("HUP", 0)
+    when ?p, ?P :
+      Process.kill("INT", 0)
     end
   end
 end

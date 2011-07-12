@@ -75,11 +75,11 @@ def create_music_thread(num_songs, duration, command, list_of_files)
       terminate = true
     }
     skip = false
-    trap("HUP") {
+    trap("SIGUSR1") {
       skip = true
     }
     playing = true
-    trap("INT") {
+    trap("SIGUSR2") {
       playing = !playing
       write(STATE_LINE,0, "PAUSED") if !playing
       write(STATE_LINE,0, "      ") if playing
@@ -213,9 +213,9 @@ init_screen do
       Process.kill("SIGTERM", 0)
       break
     when Curses::Key::RIGHT, ?s, ?S :
-      Process.kill("HUP", 0)
+      Process.kill("SIGUSR1", 0)
     when ?p, ?P :
-      Process.kill("INT", 0)
+      Process.kill("SIGUSR2", 0)
     end
   end
 end

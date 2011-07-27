@@ -206,12 +206,23 @@ def progress(time, total_time, output_line, overall=false)
   Curses.refresh
 end
 
+GETCH_TIMEOUT = 1
+
 init_screen do
   song_list = build_file_list(options[:xml], options[:dir])
   ph = create_music_thread(options[:songs], options[:duration],
                            options[:command], song_list)
   loop do
-    case Curses.getch
+    begin
+      input = Timeout.timeout(GETCH_TIMEOUT) {
+        Curses.getch
+      }
+    rescue Timeout::Error
+      # continue looping
+      input = 10 # noop
+    end
+
+    case input
     when ?q, ?Q :
       Process.kill("SIGTERM", 0)
       break
@@ -219,6 +230,11 @@ init_screen do
       Process.kill("SIGUSR1", 0)
     when ?p, ?P :
       Process.kill("SIGUSR2", 0)
+    end
+
+    # if powerhour thread terminated, exit loop
+    if !ph.status
+      break
     end
   end
 end

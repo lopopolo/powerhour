@@ -100,7 +100,7 @@ def create_music_thread(num_songs, duration, command, list_of_files)
       begin
         abort "No valid songs" if list_of_files.length < 1
         candidate = rand(list_of_files, index, !were_paused)
-        update_screen_for_new_minute(minute, num_songs, candidate)
+        update_screen_for_new_minute(minute+1, num_songs, candidate)
         open("|-", "r+") do |child|
           if child # this is the parent process
             begin

@@ -84,7 +84,7 @@ def create_music_thread(num_songs, duration, command, list_of_files)
     playing = true
     trap("SIGUSR2") {
       playing = !playing
-      write(STATE_LINE,0, "PAUSED") if !playing
+      write(STATE_LINE,0, "PAUSED                                     ") if !playing
       write(STATE_LINE,0, "      ") if playing
       Curses.refresh
     }
@@ -105,20 +105,27 @@ def create_music_thread(num_songs, duration, command, list_of_files)
           if child # this is the parent process
             begin
               start = Time.now
-              response_code = nil
-              until response_code || terminate || skip || !playing
-                delta = Time.now - start
+              child_is_eof = false
+              until (delta = Time.now - start) >= duration || terminate || skip || !playing
                 progress(delta, duration, PROGRESS_LINE)
                 progress(minute * duration + delta, num_songs * duration,
                         PROGRESS_LINE+1, true)
                 to = 0.01 * duration
                 to = 0.1 if to == 0
-                begin
-                  response_code = Timeout.timeout(to) {
-                    child.readlines
-                  }
-                rescue Timeout::Error
-                  # do nothing; this is expected, so continue looping
+                if !child_is_eof
+                  begin
+                    child_is_eof = Timeout.timeout(to) {
+                      child.eof?
+                    }
+                  rescue Timeout::Error
+                    # do nothing; this is expected, so continue looping
+                  end
+                else
+                  # spin if the song ended before duration elapsed
+                  write(STATE_LINE, 0,
+                        "Song was shorter than duration. Waiting ...")
+                  Curses.refresh
+                  sleep to
                 end
               end
             ensure

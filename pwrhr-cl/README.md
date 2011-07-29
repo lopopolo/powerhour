@@ -9,7 +9,10 @@ I originally designed it to run on a Mac because OSX 10.5+ includes the
 `afplay` utility which can play any file QuickTime supports; however,
 you can supply your own command with the `-c` switch. Despite this 
 "portability", the default options are Mac-centric (for example, grepping
-the iTunes library xml to find songs)
+the iTunes library xml to find songs).
+
+Linux users can use `mpg321`. It doesn't quite have a duration flag, but
+I believe you can use the `--frames` option to achieve a similar result.
 
 At the minimum, your system needs `find` and a command line tool to play
 audio files.

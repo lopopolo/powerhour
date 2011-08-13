@@ -106,7 +106,8 @@ def create_music_thread(num_songs, duration, command, list_of_files)
             begin
               start = Time.now
               child_is_eof = false
-              until (delta = Time.now - start) >= duration || terminate || skip || !playing
+              child_error = false
+              until (delta = Time.now - start) >= duration || terminate || skip || !playing || child_error
                 progress(delta, duration, PROGRESS_LINE)
                 progress(minute * duration + delta, num_songs * duration,
                         PROGRESS_LINE+1, true)
@@ -115,24 +116,23 @@ def create_music_thread(num_songs, duration, command, list_of_files)
                 if !child_is_eof
                   begin
                     child_is_eof = Timeout.timeout(to) {
-                      child.eof?
+                      Process.wait(child.pid)
                     }
                   rescue Timeout::Error
                     # do nothing; this is expected, so continue looping
                   end
-                else
+                elsif $? == 0
                   # spin if the song ended before duration elapsed
                   write(STATE_LINE, 0,
                         "Song was shorter than duration. Waiting ...")
                   Curses.refresh
                   sleep to
+                else # child errored out
+                  child_error = true
                 end
               end
             ensure
-              # no need to call child.close because we already
-              # wait for the process to end. Otherwise, we are
-              # terminating anyway
-              Process.kill("TERM", child.pid)
+              child.close
               Process.exit if terminate
             end
           else
@@ -177,6 +177,7 @@ def init_screen
   Curses.init_screen
   Curses.noecho
   Curses.stdscr.keypad(true) # enable arrow keys
+  Curses.curs_set(0)
   begin
     yield
   ensure
@@ -215,10 +216,11 @@ end
 
 GETCH_TIMEOUT = 1
 
-init_screen do
-  song_list = build_file_list(options[:xml], options[:dir])
-  ph = create_music_thread(options[:songs], options[:duration],
-                           options[:command], song_list)
+# setup before event loop
+song_list = build_file_list(options[:xml], options[:dir])
+ph = create_music_thread(options[:songs], options[:duration],
+                         options[:command], song_list)
+init_screen do 
   loop do
     begin
       input = Timeout.timeout(GETCH_TIMEOUT) {
@@ -240,8 +242,7 @@ init_screen do
     end
 
     # if powerhour thread terminated, exit loop
-    if !ph.status
-      break
-    end
+    break if !ph.status
   end
+  Curses.curs_set(1) # make sure cursor isn't invisible once we terminate
 end

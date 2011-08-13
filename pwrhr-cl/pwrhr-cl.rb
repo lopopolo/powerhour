@@ -233,7 +233,7 @@ init_screen do
 
     case input
     when ?q, ?Q
-      Process.kill("SIGTERM", 0)
+      Process.kill("-SIGTERM", 0)
       break
     when Curses::Key::RIGHT, ?s, ?S
       Process.kill("SIGUSR1", 0)

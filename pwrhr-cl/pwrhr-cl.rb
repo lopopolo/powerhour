@@ -10,7 +10,7 @@ opt = OptionParser.new do |opts|
   opts.banner = "Usage: #{$0} [options]\n\n"
   options[:songs] = 60
   opts.on("-n", "--number-of-songs NUMBER", Integer,
-          "Number of songs in the power hour (default 60)") do |songs|
+          "Number of songs in the power hour (default #{options[:songs]})") do |songs|
     options[:songs] = songs
   end
   options[:xml] = "$HOME/Music/iTunes/iTunes Music Library.xml"
@@ -20,7 +20,7 @@ opt = OptionParser.new do |opts|
   end
   options[:duration] = 60
   opts.on("-d", "--duration SECONDS", Integer,
-          "Duration of each song in seconds (default 60)") do |duration|
+          "Duration of each song in seconds (default #{options[:duration]})") do |duration|
     options[:duration] = duration
   end
   options[:dir] = nil
@@ -28,8 +28,7 @@ opt = OptionParser.new do |opts|
           "Use DIR of music files instead of the iTunes XML") do |dir|
     options[:dir] = dir
   end
-  options[:command] = %x[which afplay].empty? ? 
-    nil : "afplay -t <duration> <file>"
+  options[:command] = %x[which afplay].empty? ? nil : "afplay -t <duration> <file>"
   opts.on("-c", "--command \"COMMAND --some-switch <duration> <file>\"", 
           "Use COMMAND to play files. The \"<duration>\" and \"<file>\" " +
           "placeholders must be specified.") do |command|
@@ -45,8 +44,7 @@ end
 opt.parse!
 abort "Must specify COMMAND" if options[:command].nil?
 
-# wrap decode because it's in different locations in
-# 1.8 and 1.9
+# wrap decode because it's in different locations in 1.8 and 1.9
 def decode string
   return URI::decode(string) if RUBY_VERSION.include? "1.8"
   URI::Escape::decode(string)
@@ -109,8 +107,7 @@ def create_music_thread(num_songs, duration, command, list_of_files)
               child_error = false
               until (delta = Time.now - start) >= duration || terminate || skip || !playing || child_error
                 progress(delta, duration, PROGRESS_LINE)
-                progress(minute * duration + delta, num_songs * duration,
-                        PROGRESS_LINE+1, true)
+                progress(minute * duration + delta, num_songs * duration, PROGRESS_LINE+1, true)
                 to = 0.01 * duration
                 to = 0.1 if to == 0
                 if !child_is_eof
@@ -123,8 +120,7 @@ def create_music_thread(num_songs, duration, command, list_of_files)
                   end
                 elsif $? == 0
                   # spin if the song ended before duration elapsed
-                  write(STATE_LINE, 0,
-                        "Song was shorter than duration. Waiting ...")
+                  write(STATE_LINE, 0, "Song was shorter than duration. Waiting ...")
                   Curses.refresh
                   sleep to
                 else # child errored out
@@ -135,14 +131,13 @@ def create_music_thread(num_songs, duration, command, list_of_files)
               child.close
               Process.exit if terminate
             end
-          else
-           exec("#{command.gsub(
-              /<duration>/, "#{duration}").gsub(
-              /<file>/, "\"#{candidate}\"")} &> /dev/null")
+          else # in child
+           exec("#{command.gsub(/<duration>/, "#{duration}").gsub(
+              /<file>/, %Q["#{candidate}"])} &> /dev/null")
           end
         end
-        if $? != 0 && playing
-          list_of_files.delete_at(index)
+        if $? != 0 && playing # a file failed to play
+          list_of_files.delete_at(index) # so remove it
         elsif playing
           index = (index + 1) % list_of_files.length
         end
@@ -182,6 +177,7 @@ def init_screen
     yield
   ensure
     Curses.close_screen
+    Curses.curs_set(1)
   end
 end
 
@@ -218,14 +214,11 @@ GETCH_TIMEOUT = 1
 
 # setup before event loop
 song_list = build_file_list(options[:xml], options[:dir])
-ph = create_music_thread(options[:songs], options[:duration],
-                         options[:command], song_list)
+ph = create_music_thread(options[:songs], options[:duration], options[:command], song_list)
 init_screen do 
   loop do
     begin
-      input = Timeout.timeout(GETCH_TIMEOUT) {
-        Curses.getch
-      }
+      input = Timeout.timeout(GETCH_TIMEOUT) { Curses.getch }
     rescue Timeout::Error
       # continue looping
       input = 10 # noop
@@ -244,5 +237,4 @@ init_screen do
     # if powerhour thread terminated, exit loop
     break if !ph.status
   end
-  Curses.curs_set(1) # make sure cursor isn't invisible once we terminate
 end

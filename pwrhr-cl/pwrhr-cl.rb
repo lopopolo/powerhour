@@ -230,12 +230,12 @@ init_screen do
     end
 
     case input
-    when ?q, ?Q :
+    when ?q, ?Q
       Process.kill("SIGTERM", 0)
       break
-    when Curses::Key::RIGHT, ?s, ?S :
+    when Curses::Key::RIGHT, ?s, ?S
       Process.kill("SIGUSR1", 0)
-    when ?p, ?P :
+    when ?p, ?P
       Process.kill("SIGUSR2", 0)
     end
 

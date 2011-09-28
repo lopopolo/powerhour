@@ -19,8 +19,7 @@ Some awesome features of this app:
   process. Since it runs without a command window, this is non-trivial!
 * This code is formatted awfully.
 
-# In spite of all of these flaws, it does perform the task of running
-a powerhour.
+# In spite of all of these flaws, it does perform the task of running a powerhour.
 
 ## And it is somewhat configurable.
 

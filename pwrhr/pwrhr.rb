@@ -46,7 +46,7 @@ module Powerhour
   def self.parse_options
     options = {}
     opt = OptionParser.new do |opts|
-      opts.banner = "Usage: #{$0} [options]\n\n"
+      opts.banner = "Usage: ./#{$0} [options]\n\n"
       options[:songs] = 60
       opts.on("-n", "--number-of-songs NUMBER", Integer, 
               "Number of songs in the power hour (default #{options[:songs]})") do |songs|

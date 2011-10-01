@@ -6,7 +6,7 @@ It is decently configurable. These are the options `pwrhr-cl.rb` supports
 
 ```
 ▶ ./pwrhr.rb --help
-Usage: pwrhr-cl/pwrhr-cl.rb [options]
+Usage: pwrhr.rb [options]
 
     -n, --number-of-songs NUMBER     Number of songs in the power hour (default 60)
     -x, --xml FILE                   Location of iTunes XML (default $HOME/Music/iTunes/iTunes Music Library.xml

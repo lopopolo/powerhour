@@ -220,7 +220,7 @@ module Powerhour
           if child # this is the parent process
             monitor_child_process(child)
           else # in child
-            execute_command(candidate)  
+            execute_command(candidate)
           end
         rescue
           # there was a failure

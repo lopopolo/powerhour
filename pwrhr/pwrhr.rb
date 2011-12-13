@@ -13,9 +13,9 @@ module Powerhour
     # setup before event loop
     options = parse_options
     song_list = build_file_list(options[:xml], options[:dir])
-    
+
     ph = Game.new(options[:songs], options[:duration], options[:command], song_list)
-    Gui.init_screen do 
+    Gui.init_screen do
       # loop while powerhour thread not terminated
       while ph.status
         begin
@@ -48,28 +48,28 @@ module Powerhour
     opt = OptionParser.new do |opts|
       opts.banner = "Usage: ./#{$0} [options]\n\n"
       options[:songs] = 60
-      opts.on("-n", "--number-of-songs NUMBER", Integer, 
+      opts.on("-n", "--number-of-songs NUMBER", Integer,
               "Number of songs in the power hour (default #{options[:songs]})") do |songs|
         options[:songs] = songs
       end
       options[:xml] = "$HOME/Music/iTunes/iTunes Music Library.xml"
-      opts.on("-x", "--xml FILE", 
+      opts.on("-x", "--xml FILE",
               "Location of iTunes XML (default #{options[:xml]}") do |xml|
         options[:xml] = xml
       end
       options[:duration] = 60
-      opts.on("-d", "--duration SECONDS", Integer, 
+      opts.on("-d", "--duration SECONDS", Integer,
               "Duration of each song in seconds (default #{options[:duration]})") do |duration|
         options[:duration] = duration
       end
       options[:dir] = nil
-      opts.on("-D", "--directory DIR", 
+      opts.on("-D", "--directory DIR",
               "Use DIR of music files instead of the iTunes XML") do |dir|
         options[:dir] = dir
       end
       options[:command] = %x[which afplay].empty? ? nil : "afplay -t <duration> <file>"
-      opts.on("-c", "--command \"COMMAND --some-switch <duration> <file>\"", 
-              "Use COMMAND to play files. The \"<duration>\" and \"<file>\" " + 
+      opts.on("-c", "--command \"COMMAND --some-switch <duration> <file>\"",
+              "Use COMMAND to play files. The \"<duration>\" and \"<file>\" " +
               "placeholders must be specified.") do |command|
         unless command =~ /<duration>/ && command =~ /<file>/
           abort %Q[COMMAND requires "<duration>" and "<file>" placeholders]
@@ -91,7 +91,7 @@ module Powerhour
     return URI::decode(string) if RUBY_VERSION.include? "1.8"
     URI::Escape::decode(string)
   end
-  
+
   # shuffle the list if requested and return the next element
   def self.random_element(list, index, shuffle_this)
     list.shuffle! if index % list.length == 0 && shuffle_this
@@ -120,7 +120,7 @@ module Powerhour
   class Game
     attr_accessor :terminate, :skip, :playing, :game_was_paused
     attr_accessor :num_songs, :duration, :command, :list_of_files
-    
+
     def initialize(num_songs, duration, command, list_of_files, run_game=true)
       # initialize game paramters
       @num_songs = num_songs
@@ -133,7 +133,7 @@ module Powerhour
     def run
       @thread = create_music_thread
     end
-    
+
     # return the status of the game thread
     # returns false when the game is over
     def status

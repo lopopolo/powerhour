@@ -88,8 +88,7 @@ module Powerhour
 
   # wrap decode because it's in different locations in 1.8 and 1.9
   def self.decode(string)
-    return URI::decode(string) if RUBY_VERSION.include? "1.8"
-    URI::Escape::decode(string)
+    URI::decode(string)
   end
 
   # shuffle the list if requested and return the next element

@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:Application xmlns:mx="http://www.adobe.com/2006/mxml" xmlns:UI="UI.*" layout="absolute">
+	<mx:Script>
+		<![CDATA[
+			import Control.MControl;
+			public var control:MControl = new MControl();
+		]]>
+	</mx:Script>
+	
+	<mx:ViewStack id="viewstack" width="100%" height="100%" creationPolicy="all">
+		<UI:Search />
+		<UI:GameContainer />
+	</mx:ViewStack>
+</mx:Application>

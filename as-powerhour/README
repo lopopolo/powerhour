@@ -1,0 +1,10 @@
+as-powerhour
+============
+
+This project was made circa 2009.
+
+Load YouTube videos in a flex application and play one minute
+snippets of them to play a power hour.
+
+This project depends on a PHP backend to do the YouTube searching
+that I have lost.

@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:Canvas xmlns:mx="http://www.adobe.com/2006/mxml" xmlns:UI="UI.*" width="100%" height="100%" show="start_load();" >
+	<mx:Script>
+		<![CDATA[
+			import Control.MControl;
+			
+			private var minute:uint = 1;
+			private var players:Array;
+			private var active_player:uint = 0;
+			public var videos_loaded:uint = 0;
+			
+			private function start_load():void {
+				this.addEventListener("onError", player_error);
+				
+				players = new Array(player0, player1, player2);
+				for each (var player:PlayerWrapper in players) {
+					MControl.get().get_video(++videos_loaded, player);
+				}
+				start_game();
+			}
+			
+			private function start_game():void {
+				player0.visible = true;
+				player0.play();
+				var myTimer:Timer = new Timer(60000, 60); // 60 seconds, 60 times
+				myTimer.addEventListener(TimerEvent.TIMER, cycle_players);
+				myTimer.start();
+			}
+			
+			private function cycle_players(event:TimerEvent):void {
+				var old_player:PlayerWrapper = players[active_player] as PlayerWrapper;
+				active_player = (active_player + 1) % players.length;
+				var new_player:PlayerWrapper = players[active_player] as PlayerWrapper;
+				old_player.pause();
+				old_player.visible = false;
+				
+				minute++;
+				if (minute <= 60) {
+					new_player.visible = true;
+					new_player.play();
+					MControl.get().get_video(++videos_loaded, old_player);
+				}
+			}
+			
+			private function player_error(event:Event):void {
+				
+			}
+		]]>
+	</mx:Script>
+	
+	<mx:VBox width="100%" height="100%" horizontalAlign="center" >
+		<mx:Spacer height="20" />
+		<mx:Canvas>
+			<UI:PlayerWrapper id="player0" visible="false" gc="{this}" />
+			<UI:PlayerWrapper id="player1" visible="false" gc="{this}" />
+			<UI:PlayerWrapper id="player2" visible="false" gc="{this}" />
+		</mx:Canvas>
+	</mx:VBox>
+</mx:Canvas>

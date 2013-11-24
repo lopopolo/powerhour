@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:Canvas xmlns:mx="http://www.adobe.com/2006/mxml" xmlns:UI="UI.*" width="480" height="360"   initialize="create_player();" >
+	<mx:Script>
+		<![CDATA[
+			import mx.core.UIComponent;
+			import Control.MControl;
+			
+			// This will hold the API player instance once it is initialized.
+			private var player:Object;
+			private var loader:Loader;
+			
+			public var gc:GameContainer;
+			
+			private function create_player():void {
+				// The player SWF file on www.youtube.com needs to communicate with your host
+				// SWF file. Your code must call Security.allowDomain() to allow this
+				// communication.
+				Security.allowDomain("www.youtube.com");
+				
+				loader = new Loader();
+				loader.contentLoaderInfo.addEventListener(Event.INIT, onLoaderInit);
+				loader.load(new URLRequest("http://www.youtube.com/apiplayer?version=3"));
+
+			}
+			private function onLoaderInit(event:Event):void {
+				//addChild(loader);
+				loader.content.addEventListener("onReady", onPlayerReady);
+				loader.content.addEventListener("onError", onPlayerError);
+				loader.content.addEventListener("onStateChange", onPlayerStateChange);
+				loader.content.addEventListener("onPlaybackQualityChange", 
+					onVideoPlaybackQualityChange);
+			}
+			
+			private function onPlayerReady(event:Event):void {
+				// Event.data contains the event parameter, which is the Player API ID 
+				trace("player ready:", Object(event).data);
+				
+				// Once this event has been dispatched by the player, we can use
+				// cueVideoById, loadVideoById, cueVideoByUrl and loadVideoByUrl
+				// to load a particular YouTube video.
+				player = loader.content;
+				// Set appropriate player dimensions for your application
+				player.setSize(480, 360);
+				var player_display:UIComponent = new UIComponent();
+				player_display.addChild(player as DisplayObject);
+				addChild(player_display);
+			}
+			
+			private function onPlayerError(event:Event):void {
+				// Event.data contains the event parameter, which is the error code
+				trace("player error:", Object(event).data);
+				// load another video
+				MControl.get().get_video(++gc.videos_loaded, this);
+			}
+			
+			private function onPlayerStateChange(event:Event):void {
+				// Event.data contains the event parameter, which is the new player state
+				trace("player state:", Object(event).data);
+			}
+			
+			private function onVideoPlaybackQualityChange(event:Event):void {
+				// Event.data contains the event parameter, which is the new video quality
+				trace("video quality:", Object(event).data);
+			}
+			
+			public function load_video(vid:String):void {
+				player.loadVideoById(vid);
+				player.pauseVideo();
+			}
+			
+			public function play():void {
+				player.playVideo();
+			}
+			
+			public function pause():void {
+				player.pauseVideo();
+			}
+		]]>
+	</mx:Script>
+</mx:Canvas>

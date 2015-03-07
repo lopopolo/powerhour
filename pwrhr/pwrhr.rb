@@ -3,7 +3,6 @@
 require "curses"
 require "optparse"
 require "timeout"
-require "URI"
 
 module Powerhour
   # This is the only exposed method in the Powerhour module
@@ -12,9 +11,10 @@ module Powerhour
   def self.run
     # setup before event loop
     options = parse_options
-    song_list = build_file_list(options[:xml], options[:dir])
+    abort "afplay is required" if %x[which afplay].empty?
+    song_list = build_file_list(options[:dir])
 
-    ph = Game.new(options[:songs], options[:duration], options[:command], song_list)
+    ph = Game.new(options[:songs], options[:duration], song_list)
     Gui.init_screen do
       # loop while powerhour thread not terminated
       while ph.status
@@ -41,40 +41,27 @@ module Powerhour
   private
   # constants
   GETCH_TIMEOUT = 1
+  MUSIC_FILETYPES = %w[aac m4a mp3 mp4]
 
   # Parse options into a hash that is also populated with default values
   def self.parse_options
     options = {}
     opt = OptionParser.new do |opts|
-      opts.banner = "Usage: ./#{$0} [options]\n\n"
+      opts.banner = "Usage: #{$0} [options]\n\npwrhr depends on afplay."
       options[:songs] = 60
-      opts.on("-n", "--number-of-songs NUMBER", Integer,
+      opts.on("-n", "--num-songs NUMBER", Integer,
               "Number of songs in the power hour (default #{options[:songs]})") do |songs|
         options[:songs] = songs
-      end
-      options[:xml] = "$HOME/Music/iTunes/iTunes Music Library.xml"
-      opts.on("-x", "--xml FILE",
-              "Location of iTunes XML (default #{options[:xml]}") do |xml|
-        options[:xml] = xml
       end
       options[:duration] = 60
       opts.on("-d", "--duration SECONDS", Integer,
               "Duration of each song in seconds (default #{options[:duration]})") do |duration|
         options[:duration] = duration
       end
-      options[:dir] = nil
+      options[:dir] = "~/Music/iTunes/iTunes Media/Music"
       opts.on("-D", "--directory DIR",
-              "Use DIR of music files instead of the iTunes XML") do |dir|
+              "Use DIR of music files (default #{options[:dir]})") do |dir|
         options[:dir] = dir
-      end
-      options[:command] = %x[which afplay].empty? ? nil : "afplay -t <duration> <file>"
-      opts.on("-c", "--command \"COMMAND --some-switch <duration> <file>\"",
-              "Use COMMAND to play files. The \"<duration>\" and \"<file>\" " +
-              "placeholders must be specified.") do |command|
-        unless command =~ /<duration>/ && command =~ /<file>/
-          abort %Q[COMMAND requires "<duration>" and "<file>" placeholders]
-        end
-        options[:command] = command
       end
       opts.on("-h", "--help", "Display this screen") do
         puts opts
@@ -82,13 +69,7 @@ module Powerhour
       end
     end
     opt.parse!
-    abort "Must specify COMMAND" if options[:command].nil?
     options
-  end
-
-  # wrap decode because it's in different locations in 1.8 and 1.9
-  def self.decode(string)
-    URI::decode(string)
   end
 
   # shuffle the list if requested and return the next element
@@ -97,20 +78,17 @@ module Powerhour
     list[index % list.length]
   end
 
-  # Either grep the iTunes library xml for songs
-  # or get all of the files in the supplied directory using find
-  def self.build_file_list(xml, dir)
+  # get all of the files in the supplied directory using glob
+  def self.build_file_list(dir)
     # find all of the paths in source
-    if dir.nil?
-      list_of_files = \
-        %x[grep "Location" "#{xml}"].split("\n").map do |line|
-          decode($2) if /<string>file:\/\/(localhost)?(.+)<\/string>/ =~ line
-        end.compact
-    else
-      list_of_files = %x[find "#{dir.chomp("/")}" -type f].split("\n")
+    dir = File.expand_path(dir) if !dir.nil?
+    abort "#{dir} is not a directory" if !File.directory?(dir)
+
+    music_files = []
+    Dir.glob("#{dir.chomp("/")}/**/*.{#{MUSIC_FILETYPES.join(",")}}") do |path|
+      music_files << path
     end
-    abort "Unable to build file list" if $? != 0
-    list_of_files
+    music_files
   end
 
   # This class encapsulates all of the game logic
@@ -118,13 +96,12 @@ module Powerhour
   # which files are playable, etc.
   class Game
     attr_accessor :terminate, :skip, :playing, :game_was_paused
-    attr_accessor :num_songs, :duration, :command, :list_of_files
+    attr_accessor :num_songs, :duration, :list_of_files
 
-    def initialize(num_songs, duration, command, list_of_files, run_game=true)
+    def initialize(num_songs, duration, list_of_files, run_game=true)
       # initialize game paramters
       @num_songs = num_songs
       @duration = duration
-      @command = command
       @list_of_files = list_of_files
       run if run_game
     end
@@ -163,8 +140,8 @@ module Powerhour
 
     # execute the song playing command with the given song
     def execute_command(candidate)
-      exec("#{command.gsub(/<duration>/, "#{@duration}").gsub(
-              /<file>/, %Q["#{candidate}"])} &> /dev/null")
+      afplay_command = "afplay -t #{@duration} \"#{candidate}\" &> /dev/null"
+      exec(afplay_command)
     end
 
     # check the state of the child song-playing process over
@@ -303,7 +280,7 @@ module Powerhour
       write(0,0, "Welcome to pwrhr-cl, serving all of your power hour needs")
       write(1,0, "Song #{minute} of #{num_songs}")
       write(2,0, "Playing #{playing}")
-      write(INPUT_INST_LINE,0, "Enter q to quit, s to skip song, p to toggle play/pause")
+      write(INPUT_INST_LINE, 0, "Enter q to quit, s to skip song, p to toggle play/pause")
       Curses.refresh
     end
 

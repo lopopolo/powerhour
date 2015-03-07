@@ -104,7 +104,7 @@ module Powerhour
     if dir.nil?
       list_of_files = \
         %x[grep "Location" "#{xml}"].split("\n").map do |line|
-        decode($1) if /<string>file:\/\/localhost(.+)<\/string>/ =~ line
+          decode($2) if /<string>file:\/\/(localhost)?(.+)<\/string>/ =~ line
         end.compact
     else
       list_of_files = %x[find "#{dir.chomp("/")}" -type f].split("\n")
@@ -175,7 +175,6 @@ module Powerhour
       begin
         start = Time.now
         child_is_eof = false
-        child_error = false
         until (delta = Time.now - start) >= @duration || @terminate || @skip || !@playing
           Gui.write_minute_progress(delta, @duration)
           Gui.write_overall_progress(@minute * @duration + delta, @num_songs * @duration)

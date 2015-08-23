@@ -14,7 +14,13 @@ module Powerhour
     abort "afplay is required" if %x[which afplay].empty?
     song_list = build_file_list(options[:dir])
 
-    ph = Game.new(options[:songs], options[:duration], song_list)
+    gui = Gui.new
+    gui.base_path = options[:dir]
+    gui.session_duration = options[:songs] * options[:duration]
+    gui.song_duration = options[:duration]
+    gui.total_songs = options[:songs]
+
+    ph = Game.new(options[:songs], options[:duration], song_list, gui)
     Gui.init_screen do
       # loop while powerhour thread not terminated
       while ph.status
@@ -92,13 +98,15 @@ module Powerhour
     attr_accessor :terminate, :skip, :playing, :game_was_paused
     attr_accessor :num_songs, :duration
     attr_accessor :all_files, :playlist
+    attr_accessor :gui
 
-    def initialize(num_songs, duration, all_files, run_game=true)
+    def initialize(num_songs, duration, all_files, gui, run_game=true)
       # initialize game paramters
       @num_songs = num_songs
       @duration = duration
       @all_files = all_files
       @playlist = @all_files.shuffle
+      @gui = gui
       run if run_game
     end
 
@@ -130,7 +138,6 @@ module Powerhour
       # receive the pause signal
       trap("SIGUSR2") {
         @playing = !@playing
-        @playing ? Gui.write_state(" " * 6)  : Gui.write_state("PAUSED" + " " * 16)
       }
     end
 
@@ -149,8 +156,9 @@ module Powerhour
         start = Time.now
         child_is_eof = false
         until (delta = Time.now - start) >= @duration || @terminate || @skip || !@playing
-          Gui.write_minute_progress(delta, @duration)
-          Gui.write_overall_progress(@minute * @duration + delta, @num_songs * @duration)
+          @gui.elapsed_song_time = delta
+          @gui.elapsed_session_time = @minute * @duration + delta
+          @gui.paint
           to = 0.01 * duration
           to = 0.1 if to == 0
           # check if child process has finished
@@ -166,7 +174,6 @@ module Powerhour
           # yet, so spin
           elsif $? == 0
             # spin if the song ended before duration elapsed
-            Gui.write_state("Song was shorter than duration. Waiting ...")
             sleep to
           else # child errored out
             break # so break out of the loop
@@ -183,7 +190,10 @@ module Powerhour
     def try_song
       song = @playlist.pop
       abort "No valid songs" if song.nil?
-      Gui.update_screen_for_new_minute(@minute + 1, @num_songs, song)
+      @gui.playing_song = song
+      @gui.elapsed_song_time = 0
+      @gui.current_song = @minute + 1
+      @gui.paint
 
       # fork to execute the music command
       open("|-", "r+") do |child|
@@ -216,7 +226,7 @@ module Powerhour
         while @minute < @num_songs do
           # spin if paused
           @game_was_paused = false
-          until playing
+          until @playing
             sleep 0.1
             @game_was_paused = true
           end
@@ -242,44 +252,23 @@ module Powerhour
   # Because there is only ever one terminal, we can never have
   # multiple GUIs.
   class Gui
-    # curses stuff
-    PROGRESS_LINE = 10
-    PROGRESS_WIDTH = 50
-    INPUT_INST_LINE = PROGRESS_LINE + 2
-    STATE_LINE = INPUT_INST_LINE + 1
+    BEER = [
+       " [=] ",
+       " | | ",
+       " }@{ ",
+       "/   \\",
+       ":___;",
+       "|&&&|",
+       "|&&&|",
+       "|---|",
+       "'---'",
+    ]
 
-    # A raw write method to the curses display.
-    # Always refresh the display after a write.
-    def self.write(line, col, text)
-      Curses.setpos(line,col)
-      Curses.addstr(text)
-      Curses.refresh
-    end
-
-    # helper method for writing powerhour state
-    def self.write_state(text)
-      write(STATE_LINE, 0, text)
-    end
-
-    # helper method for writing overall powerhour progress
-    def self.write_overall_progress(time, total_time)
-      progress(time, total_time, PROGRESS_LINE + 1, true)
-    end
-
-    # helper method for writing song progress
-    def self.write_minute_progress(time, total_time)
-      progress(time, total_time, PROGRESS_LINE, false)
-    end
-
-    # repaint the screen for a new song
-    def self.update_screen_for_new_minute(minute, num_songs, playing)
-      Curses.clear
-      write(0,0, "Welcome to pwrhr-cl, serving all of your power hour needs")
-      write(1,0, "Song #{minute} of #{num_songs}")
-      write(2,0, "Playing #{playing}")
-      write(INPUT_INST_LINE, 0, "Enter q to quit, s to skip song, p to toggle play/pause")
-      Curses.refresh
-    end
+    attr_accessor :base_path, :playing_song
+    attr_accessor :session_duration, :elapsed_session_time
+    attr_accessor :song_duration, :elapsed_song_time
+    attr_accessor :total_songs, :current_song
+    attr_accessor :cols, :rows
 
     # setup the gui
     # pass in a code block that contains the event loop
@@ -296,35 +285,85 @@ module Powerhour
       end
     end
 
+    def paint
+      @cols = Curses.cols
+      @rows = Curses.lines
+      Curses.clear
+      paint_banner
+      paint_song_counter
+      top_height = paint_now_playing + 2
+      paint_elapsed_time_bars
+      paint_footer
+      paint_beer(top_height, 3)
+      Curses.refresh
+    end
+
+    private
+    def paint_banner
+      write(0, 0, "Welcome to pwrhr, serving all of your power hour needs")
+    end
+
+    def paint_song_counter
+      write(1, 0, "Song #{@current_song} of #{@total_songs}")
+    end
+
+    def paint_now_playing
+      write(2, 0, "Now Playing:")
+      song = if @playing_song.nil?
+               ""
+             else
+               @playing_song.gsub(/^(#{@base_path}|#{File.expand_path(@base_path)})/, "")
+             end
+      song.split(File::SEPARATOR).each_with_index do |component, index|
+        write(3 + index, 0, "  #{component}")
+      end
+      1 + song.split(File::SEPARATOR).length
+    end
+
+    def paint_elapsed_time_bars
+      puts @rows
+      progress(@elapsed_song_time, @song_duration, @rows - 3)
+      progress(@elapsed_session_time, @session_duration, @rows - 2)
+    end
+
+    def paint_footer
+      write(@rows - 1, 0, "Enter q to quit, s to skip song, p to toggle play/pause")
+    end
+
+    def paint_beer(top_height, bottom_height)
+      avail_height = @rows - top_height - bottom_height
+      line = (avail_height - BEER.size) / 2 + top_height
+      BEER.each_with_index do |ascii, index|
+        write_col = (@cols - ascii.length) / 2
+        write(line + index, write_col, ascii)
+      end
+    end
+
+    # A raw write method to the curses display.
+    # Always refresh the display after a write.
+    def write(line, col, text)
+      Curses.setpos(line, col)
+      Curses.addstr(text)
+    end
+
     # helper method for formatting time elapsed
-    def self.format_time seconds
-      time = []
-      int_seconds = Integer(seconds)
-      hours = int_seconds / 3600
-      minutes = (int_seconds / 60) % 60
-      sec = seconds % 60
-      time << "#{hours}h" if hours > 0
-      time << "#{minutes}m" if minutes > 0
-      time << "%.2fs" % sec if sec > 0
-      return time.join(" ")
+    def format_time seconds
+      Time.at(seconds).utc.strftime("%Hh %Mm %Ss").gsub(/^00h /, "")
     end
 
     # write a progress bar to the screen
-    def self.progress(time, total_time, output_line, overall=false)
-      bar = ""
-      if total_time != 0
-        percent = Float(time)/total_time
-        PROGRESS_WIDTH.times do |i|
-          bar = "#{bar}=" if i <= percent * PROGRESS_WIDTH
-          bar = "#{bar} " if i > percent * PROGRESS_WIDTH
-        end
-        bar = "|#{bar}|"
-          bar = "#{bar}[#{format_time time} elapsed / #{format_time total_time}]"
-      elsif !overall
-        bar = "[#{format_time time} elapsed]"
+    def progress(elapsed, duration, output_line)
+      return if elapsed.nil? || duration.nil?
+      progress_bar = ""
+      percent = 1.0 * elapsed / duration
+      suffix = "[#{format_time elapsed} elapsed / #{format_time duration}]"
+      progress_bar_width = @cols - suffix.length - 2
+      [progress_bar_width, 0].max.times do |i|
+        progress_bar = "#{progress_bar}=" if i <= percent * progress_bar_width
+        progress_bar = "#{progress_bar} " if i > percent * progress_bar_width
       end
-      write(output_line,0, bar)
-      Curses.refresh
+      progress_bar = "|#{progress_bar}|#{suffix}"
+      write(output_line, 0, progress_bar)
     end
   end
 end

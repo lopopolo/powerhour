@@ -95,7 +95,7 @@ module Powerhour
   # When to play a song, keeping track of the minute,
   # which files are playable, etc.
   class Game
-    attr_accessor :terminate, :skip, :playing, :game_was_paused
+    attr_accessor :terminate, :skip, :playing
     attr_accessor :num_songs, :duration
     attr_accessor :all_files, :playlist
     attr_accessor :gui
@@ -225,10 +225,8 @@ module Powerhour
         @index = @minute = 0
         while @minute < @num_songs do
           # spin if paused
-          @game_was_paused = false
           until @playing
             sleep 0.1
-            @game_was_paused = true
           end
 
           # this is a nasty do while loop

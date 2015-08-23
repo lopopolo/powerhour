@@ -72,12 +72,6 @@ module Powerhour
     options
   end
 
-  # shuffle the list if requested and return the next element
-  def self.random_element(list, index, shuffle_this)
-    list.shuffle! if index % list.length == 0 && shuffle_this
-    list[index % list.length]
-  end
-
   # get all of the files in the supplied directory using glob
   def self.build_file_list(dir)
     # find all of the paths in source
@@ -96,13 +90,15 @@ module Powerhour
   # which files are playable, etc.
   class Game
     attr_accessor :terminate, :skip, :playing, :game_was_paused
-    attr_accessor :num_songs, :duration, :list_of_files
+    attr_accessor :num_songs, :duration
+    attr_accessor :all_files, :playlist
 
-    def initialize(num_songs, duration, list_of_files, run_game=true)
+    def initialize(num_songs, duration, all_files, run_game=true)
       # initialize game paramters
       @num_songs = num_songs
       @duration = duration
-      @list_of_files = list_of_files
+      @all_files = all_files
+      @playlist = @all_files.shuffle
       run if run_game
     end
 
@@ -185,9 +181,9 @@ module Powerhour
     # try playing a song for the current minute.
     # If we are successful, advance the current song index
     def try_song
-      abort "No valid songs" if @list_of_files.empty?
-      candidate = Powerhour::random_element(@list_of_files, @index, !@game_was_paused)
-      Gui.update_screen_for_new_minute(@minute + 1, @num_songs, candidate)
+      song = @playlist.pop
+      abort "No valid songs" if song.nil?
+      Gui.update_screen_for_new_minute(@minute + 1, @num_songs, song)
 
       # fork to execute the music command
       open("|-", "r+") do |child|
@@ -195,7 +191,7 @@ module Powerhour
           if child # this is the parent process
             monitor_child_process(child)
           else # in child
-            execute_command(candidate)
+            execute_command(song)
           end
         rescue
           # there was a failure
@@ -203,10 +199,11 @@ module Powerhour
         end
       end
 
-      if $? != 0 && @playing # a file failed to play
-        list_of_files.delete_at(@index) # so remove it
-      elsif @playing
-        @index = (@index + 1) % @list_of_files.length
+      if !@playing
+        @playlist.push(song)
+      end
+      if @playlist.empty?
+        @playlist = @all_files.shuffle
       end
     end
 

@@ -245,9 +245,6 @@ module Powerhour
     end
   end
 
-  # A singleton class that encapsulates all of the curses stuff
-  # Because there is only ever one terminal, we can never have
-  # multiple GUIs.
   class Gui
     BEER = [
        " [=] ",
@@ -318,7 +315,6 @@ module Powerhour
     end
 
     def paint_elapsed_time_bars
-      puts @rows
       progress(@elapsed_song_time, @song_duration, @rows - 3)
       progress(@elapsed_session_time, @session_duration, @rows - 2)
     end

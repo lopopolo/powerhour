@@ -111,6 +111,11 @@ module Powerhour
     end
 
     def run
+      # initialize control flow bools
+      @terminate = false
+      @skip = false
+      @playing = true
+
       @thread = create_music_thread
     end
 
@@ -127,10 +132,6 @@ module Powerhour
     # There are signals for terminating, skipping a song,
     # and toggling play/pause.
     def init_signal_handlers
-      # initialize control flow bools
-      @terminate = false
-      @skip = false
-      @playing = true
       # receive terminate signal
       trap("SIGTERM") { @terminate = true }
       # receive skip signal

@@ -2,6 +2,7 @@
 
 require "curses"
 require "optparse"
+require "thread"
 require "timeout"
 
 module Powerhour
@@ -20,7 +21,9 @@ module Powerhour
     gui.song_duration = options[:duration]
     gui.total_songs = options[:songs]
 
-    ph = Game.new(options[:songs], options[:duration], song_list, gui)
+    queue = Queue.new
+
+    ph = Game.new(options[:songs], options[:duration], song_list, gui, queue)
     Gui.init_screen do
       # loop while powerhour thread not terminated
       while ph.status
@@ -32,13 +35,12 @@ module Powerhour
         end
 
         case input
-        when ?q, ?Q
-          Process.kill("-SIGTERM", 0) # kill music thread
-          break
         when Curses::Key::RIGHT, ?s, ?S
-          Process.kill("SIGUSR1", 0) # send skip signal to music thread
+          queue << EVENT_SKIP
         when ?p, ?P
-          Process.kill("SIGUSR2", 0) # send pause signal to music thread
+          queue << EVENT_TOGGLE_PAUSE
+        when ?q, ?Q
+          queue << EVENT_QUIT
         end
       end
     end
@@ -46,6 +48,9 @@ module Powerhour
 
   private
   # constants
+  EVENT_SKIP = "SKIP"
+  EVENT_TOGGLE_PAUSE = "TOGGLE_PAUSE"
+  EVENT_QUIT = "QUIT"
   GETCH_TIMEOUT = 1
   MUSIC_FILETYPES = %w[aac m4a mp3 mp4]
 
@@ -98,15 +103,16 @@ module Powerhour
     attr_accessor :terminate, :skip, :playing
     attr_accessor :num_songs, :duration
     attr_accessor :all_files, :playlist
-    attr_accessor :gui
+    attr_accessor :gui, :queue
 
-    def initialize(num_songs, duration, all_files, gui, run_game=true)
+    def initialize(num_songs, duration, all_files, gui, queue, run_game=true)
       # initialize game paramters
       @num_songs = num_songs
       @duration = duration
       @all_files = all_files
       @playlist = @all_files.shuffle
       @gui = gui
+      @queue = queue
       run if run_game
     end
 
@@ -116,6 +122,19 @@ module Powerhour
       @skip = false
       @playing = true
 
+      @control_thread = Thread.new do
+        loop do
+          case @queue.pop
+          when EVENT_SKIP
+            @skip = true
+          when EVENT_TOGGLE_PAUSE
+            @playing = !@playing
+          when EVENT_QUIT
+            @terminate = true
+            break
+          end
+        end
+      end
       @thread = create_music_thread
     end
 
@@ -126,21 +145,6 @@ module Powerhour
     end
 
     private
-
-    # Because ruby threads don't share memory, use signals
-    # to pass messages to the game thread.
-    # There are signals for terminating, skipping a song,
-    # and toggling play/pause.
-    def init_signal_handlers
-      # receive terminate signal
-      trap("SIGTERM") { @terminate = true }
-      # receive skip signal
-      trap("SIGUSR1") { @skip = true }
-      # receive the pause signal
-      trap("SIGUSR2") {
-        @playing = !@playing
-      }
-    end
 
     def afplay_command(candidate)
       %Q[afplay -t #{@duration} "#{candidate}"]
@@ -218,9 +222,7 @@ module Powerhour
 
     # initialize the thread, which contains the main game loop
     def create_music_thread
-      return Thread.new do
-        init_signal_handlers
-
+      Thread.new do
         @index = @minute = 0
         while @minute < @num_songs do
           # spin if paused

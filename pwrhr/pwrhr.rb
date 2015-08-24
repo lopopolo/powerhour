@@ -142,31 +142,35 @@ module Powerhour
       }
     end
 
-    # execute the song playing command with the given song
-    def execute_command(candidate)
-      afplay_command = "afplay -t #{@duration} \"#{candidate}\" &> /dev/null"
-      exec(afplay_command)
+    def afplay_command(candidate)
+      %Q[afplay -t #{@duration} "#{candidate}"]
     end
 
     # check the state of the child song-playing process over
     # the course of the minute. This method updates the gui as
     # the minute progresses. It also ensures the child is
     # terminated.
-    def monitor_child_process(child)
+    def monitor_child_process(child_pid)
       begin
         start = Time.now
         child_is_eof = false
-        until (delta = Time.now - start) >= @duration || @terminate || @skip || !@playing
+        until (delta = Time.now - start) >= @duration
           @gui.elapsed_song_time = delta
           @gui.elapsed_session_time = @minute * @duration + delta
           @gui.paint
+
+          if @terminate || @skip || !@playing
+            Process.kill("SIGKILL", child_pid)
+            break
+          end
+
           to = 0.01 * duration
           to = 0.1 if to == 0
           # check if child process has finished
           if !child_is_eof
             begin
               child_is_eof = Timeout.timeout(to) {
-                Process.wait(child.pid)
+                Process.wait(child_pid)
               }
             rescue Timeout::Error
               # do nothing; this is expected, so continue looping
@@ -181,7 +185,6 @@ module Powerhour
           end
         end
       ensure
-        child.close
         Process.exit if @terminate
       end
     end
@@ -197,17 +200,12 @@ module Powerhour
       @gui.paint
 
       # fork to execute the music command
-      open("|-", "r+") do |child|
-        begin
-          if child # this is the parent process
-            monitor_child_process(child)
-          else # in child
-            execute_command(song)
-          end
-        rescue
-          # there was a failure
-          # this is ok, $? will be nonzero
-        end
+      begin
+        child_pid = Process.spawn(afplay_command(song))
+        monitor_child_process(child_pid)
+      rescue
+        # there was a failure
+        # this is ok, $? will be nonzero
       end
 
       if !@playing

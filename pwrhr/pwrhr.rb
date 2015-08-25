@@ -52,7 +52,7 @@ module Powerhour
   EVENT_SKIP = "SKIP"
   EVENT_TOGGLE_PAUSE = "TOGGLE_PAUSE"
   EVENT_QUIT = "QUIT"
-  GETCH_TIMEOUT = 1
+  GETCH_TIMEOUT = 0.1
   MUSIC_FILETYPES = %w[aac m4a mp3 mp4]
 
   # Parse options into a hash that is also populated with default values

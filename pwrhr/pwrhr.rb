@@ -157,8 +157,9 @@ module Powerhour
     def monitor_child_process(child_pid)
       begin
         start = Time.now
-        child_is_eof = false
-        until (delta = Time.now - start) >= @duration
+        busywait = 0.1
+        status = nil
+        while (delta = Time.now - start) < @duration
           @gui.elapsed_song_time = delta
           @gui.elapsed_session_time = @minute * @duration + delta
           @gui.paint
@@ -168,24 +169,20 @@ module Powerhour
             break
           end
 
-          to = 0.01 * duration
-          to = 0.1 if to == 0
-          # check if child process has finished
-          if !child_is_eof
-            begin
-              child_is_eof = Timeout.timeout(to) {
-                Process.wait(child_pid)
-              }
-            rescue Timeout::Error
-              # do nothing; this is expected, so continue looping
+          if status.nil?
+            # check if child process has finished
+            _, status = Process.wait2(child_pid, Process::WNOHANG)
+            if status.nil?
+              # no child has finished, so spin
+              sleep busywait
             end
-          # child completed successfully, but we haven't gone a whole minute
-          # yet, so spin
-          elsif $? == 0
-            # spin if the song ended before duration elapsed
-            sleep to
-          else # child errored out
-            break # so break out of the loop
+          elsif status.exitstatus == 0
+            # child completed successfully, but we haven't gone a whole minute
+            # yet, so spin
+            sleep busywait
+          else
+            # child errored out, so break out of the loop
+            break
           end
         end
       ensure

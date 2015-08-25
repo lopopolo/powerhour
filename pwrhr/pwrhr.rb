@@ -7,7 +7,7 @@ require "timeout"
 
 module Powerhour
   # This is the only exposed method in the Powerhour module
-  # Thia method parses command line options, sets up the game,
+  # This method parses command line options, sets up the game,
   # and accepts user input
   def self.run
     # setup before event loop

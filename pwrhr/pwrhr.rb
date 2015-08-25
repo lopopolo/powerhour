@@ -25,6 +25,7 @@ module Powerhour
 
     ph = Game.new(options[:songs], options[:duration], song_list, gui, queue)
     Gui.init_screen do
+      ph.run
       # loop while powerhour thread not terminated
       while ph.status
         begin
@@ -105,7 +106,7 @@ module Powerhour
     attr_accessor :all_files, :playlist
     attr_accessor :gui, :queue
 
-    def initialize(num_songs, duration, all_files, gui, queue, run_game=true)
+    def initialize(num_songs, duration, all_files, gui, queue)
       # initialize game paramters
       @num_songs = num_songs
       @duration = duration
@@ -113,16 +114,15 @@ module Powerhour
       @playlist = @all_files.shuffle
       @gui = gui
       @queue = queue
-      run if run_game
     end
 
     def run
-      # initialize control flow bools
-      @terminate = false
-      @skip = false
-      @playing = true
+      @control_thread ||= Thread.new do
+        # initialize control flow bools
+        @terminate = false
+        @skip = false
+        @playing = true
 
-      @control_thread = Thread.new do
         loop do
           case @queue.pop
           when EVENT_SKIP
@@ -135,7 +135,7 @@ module Powerhour
           end
         end
       end
-      @thread = create_music_thread
+      @thread ||= create_music_thread
     end
 
     # return the status of the game thread

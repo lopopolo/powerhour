@@ -54,6 +54,7 @@ module Powerhour
   EVENT_SKIP = 'SKIP'
   EVENT_TOGGLE_PAUSE = 'TOGGLE_PAUSE'
   EVENT_QUIT = 'QUIT'
+  BUSYWAIT = 0.1
   GETCH_TIMEOUT = 0.1
   MUSIC_FILETYPES = %w[aac m4a mp3 mp4]
 
@@ -161,7 +162,6 @@ module Powerhour
     def monitor_child_process(child_pid)
       begin
         start = Time.now
-        busywait = 0.1
         status = nil
         while (delta = Time.now - start) < @duration
           @gui.elapsed_song_time = delta
@@ -178,12 +178,12 @@ module Powerhour
             _, status = Process.wait2(child_pid, Process::WNOHANG)
             if status.nil?
               # no child has finished, so spin
-              sleep busywait
+              sleep BUSYWAIT
             end
           elsif status.exitstatus == 0
             # child completed successfully, but we haven't gone a whole minute
             # yet, so spin
-            sleep busywait
+            sleep BUSYWAIT
           else
             # child errored out, so break out of the loop
             break
@@ -228,7 +228,7 @@ module Powerhour
         while @minute < @num_songs do
           # spin if paused
           until @playing
-            sleep 0.1
+            sleep BUSYWAIT
             Process.exit if @terminate
           end
 

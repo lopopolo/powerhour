@@ -42,6 +42,8 @@ module Powerhour
           queue << EVENT_TOGGLE_PAUSE
         when ?q, ?Q
           queue << EVENT_QUIT
+        else
+          # Ignore all other key input
         end
       end
     end
@@ -132,6 +134,8 @@ module Powerhour
           when EVENT_QUIT
             @terminate = true
             break
+          else
+            # ignore all other events
           end
         end
       end

@@ -87,8 +87,8 @@ module Powerhour
   # get all of the files in the supplied directory using glob
   def self.build_file_list(dir)
     # find all of the paths in source
-    dir = File.expand_path(dir) if !dir.nil?
-    abort "#{dir} is not a directory" if !File.directory?(dir)
+    dir = File.expand_path(dir) unless dir.nil?
+    abort "#{dir} is not a directory" unless File.directory?(dir)
 
     music_files = []
     Dir.glob("#{dir.chomp("/")}/**/*.{#{MUSIC_FILETYPES.join(",")}}") do |path|
@@ -209,7 +209,7 @@ module Powerhour
         # this is ok, $? will be nonzero
       end
 
-      if !@playing
+      unless @playing
         @playlist.push(song)
       end
       if @playlist.empty?
@@ -340,7 +340,7 @@ module Powerhour
     end
 
     # helper method for formatting time elapsed
-    def format_time seconds
+    def format_time(seconds)
       Time.at(seconds).utc.strftime("%Hh %Mm %Ss").gsub(/^00h /, "")
     end
 

@@ -1,9 +1,9 @@
 #!/usr/bin/env ruby
 
-require "curses"
-require "optparse"
-require "thread"
-require "timeout"
+require 'curses'
+require 'optparse'
+require 'thread'
+require 'timeout'
 
 module Powerhour
   # This is the only exposed method in the Powerhour module
@@ -12,7 +12,7 @@ module Powerhour
   def self.run
     # setup before event loop
     options = parse_options
-    abort "afplay is required" if %x[which afplay].empty?
+    abort 'afplay is required' if %x[which afplay].empty?
     song_list = build_file_list(options[:dir])
 
     gui = Gui.new
@@ -49,9 +49,9 @@ module Powerhour
 
   private
   # constants
-  EVENT_SKIP = "SKIP"
-  EVENT_TOGGLE_PAUSE = "TOGGLE_PAUSE"
-  EVENT_QUIT = "QUIT"
+  EVENT_SKIP = 'SKIP'
+  EVENT_TOGGLE_PAUSE = 'TOGGLE_PAUSE'
+  EVENT_QUIT = 'QUIT'
   GETCH_TIMEOUT = 0.1
   MUSIC_FILETYPES = %w[aac m4a mp3 mp4]
 
@@ -61,21 +61,21 @@ module Powerhour
     opt = OptionParser.new do |opts|
       opts.banner = "Usage: #{$0} [options]\n\npwrhr depends on afplay."
       options[:songs] = 60
-      opts.on("-n", "--num-songs NUMBER", Integer,
+      opts.on('-n', '--num-songs NUMBER', Integer,
               "Number of songs in the power hour (default #{options[:songs]})") do |songs|
         options[:songs] = songs
       end
       options[:duration] = 60
-      opts.on("-d", "--duration SECONDS", Integer,
+      opts.on('-d', '--duration SECONDS', Integer,
               "Duration of each song in seconds (default #{options[:duration]})") do |duration|
         options[:duration] = duration
       end
-      options[:dir] = "~/Music/iTunes/iTunes Media/Music"
-      opts.on("-D", "--directory DIR",
+      options[:dir] = '~/Music/iTunes/iTunes Media/Music'
+      opts.on('-D', '--directory DIR',
               "Use DIR of music files (default #{options[:dir]})") do |dir|
         options[:dir] = dir
       end
-      opts.on("-h", "--help", "Display this screen") do
+      opts.on('-h', '--help', 'Display this screen') do
         puts opts
         exit
       end
@@ -91,7 +91,7 @@ module Powerhour
     abort "#{dir} is not a directory" unless File.directory?(dir)
 
     music_files = []
-    Dir.glob("#{dir.chomp("/")}/**/*.{#{MUSIC_FILETYPES.join(",")}}") do |path|
+    Dir.glob("#{dir.chomp('/')}/**/*.{#{MUSIC_FILETYPES.join(',')}}") do |path|
       music_files << path
     end
     music_files
@@ -165,7 +165,7 @@ module Powerhour
           @gui.paint
 
           if @terminate || @skip || !@playing
-            Process.kill("SIGKILL", child_pid)
+            Process.kill('SIGKILL', child_pid)
             break
           end
 
@@ -194,7 +194,7 @@ module Powerhour
     # If we are successful, advance the current song index
     def try_song
       song = @playlist.pop
-      abort "No valid songs" if song.nil?
+      abort 'No valid songs' if song.nil?
       @gui.playing_song = song
       @gui.elapsed_song_time = 0
       @gui.current_song = @minute + 1
@@ -247,15 +247,15 @@ module Powerhour
 
   class Gui
     BEER = [
-       " [=] ",
-       " | | ",
-       " }@{ ",
-       "/   \\",
-       ":___;",
-       "|&&&|",
-       "|&&&|",
-       "|---|",
-       "'---'",
+        ' [=] ',
+        ' | | ',
+        ' }@{ ',
+        '/   \\',
+        ':___;',
+        '|&&&|',
+        '|&&&|',
+        '|---|',
+        "'---'",
     ]
 
     attr_accessor :base_path, :playing_song
@@ -294,7 +294,7 @@ module Powerhour
 
     private
     def paint_banner
-      write(0, 0, "Welcome to pwrhr, serving all of your power hour needs")
+      write(0, 0, 'Welcome to pwrhr, serving all of your power hour needs')
     end
 
     def paint_song_counter
@@ -302,11 +302,11 @@ module Powerhour
     end
 
     def paint_now_playing
-      write(2, 0, "Now Playing:")
+      write(2, 0, 'Now Playing:')
       song = if @playing_song.nil?
-               ""
+               ''
              else
-               @playing_song.gsub(/^(#{@base_path}|#{File.expand_path(@base_path)})/, "")
+               @playing_song.gsub(/^(#{@base_path}|#{File.expand_path(@base_path)})/, '')
              end
       song.split(File::SEPARATOR).each_with_index do |component, index|
         write(3 + index, 0, "  #{component}")
@@ -320,7 +320,7 @@ module Powerhour
     end
 
     def paint_footer
-      write(@rows - 1, 0, "Enter q to quit, s to skip song, p to toggle play/pause")
+      write(@rows - 1, 0, 'Enter q to quit, s to skip song, p to toggle play/pause')
     end
 
     def paint_beer(top_height, bottom_height)
@@ -341,21 +341,21 @@ module Powerhour
 
     # helper method for formatting time elapsed
     def format_time(seconds)
-      Time.at(seconds).utc.strftime("%Hh %Mm %Ss").gsub(/^00h /, "")
+      Time.at(seconds).utc.strftime('%Hh %Mm %Ss').gsub(/^00h /, '')
     end
 
     # write a progress bar to the screen
     def progress(elapsed, duration, output_line)
       return if elapsed.nil? || duration.nil?
-      progress_bar = ""
+      progress_bar = ''
       percent = 1.0 * elapsed / duration
       suffix = "[#{format_time elapsed} elapsed / #{format_time duration}]"
       progress_bar_width = @cols - suffix.length - 2
       [progress_bar_width, 0].max.times do |i|
         if i <= percent * progress_bar_width
-          progress_bar << "="
+          progress_bar << '='
         else
-          progress_bar << " "
+          progress_bar << ' '
         end
       end
       progress_bar = "|#{progress_bar}|#{suffix}"

@@ -266,7 +266,6 @@ module Powerhour
     attr_accessor :session_duration, :elapsed_session_time
     attr_accessor :song_duration, :elapsed_song_time
     attr_accessor :total_songs, :current_song
-    attr_accessor :cols, :rows
 
     # setup the gui
     # pass in a code block that contains the event loop

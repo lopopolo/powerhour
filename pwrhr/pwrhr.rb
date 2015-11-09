@@ -225,6 +225,7 @@ module Powerhour
           # spin if paused
           until @playing
             sleep 0.1
+            Process.exit if @terminate
           end
 
           # this is a nasty do while loop

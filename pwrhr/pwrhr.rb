@@ -298,31 +298,31 @@ module Powerhour
       @cols = Curses.cols
       @rows = Curses.lines
       Curses.clear
-      paint_banner
-      paint_song_counter
-      top_height = paint_now_playing + 2
-      paint_elapsed_time_bars
-      paint_footer
-      paint_beer(top_height, 3)
+      top_height = 0
+      bottom_height = 0
+      top_height += paint_banner
+      top_height += paint_song_counter
+      top_height += paint_now_playing
+      bottom_height += paint_elapsed_time_bars
+      bottom_height += paint_footer
+      paint_beer(top_height, bottom_height)
       Curses.refresh
     end
 
     private
     def paint_banner
       write(0, 0, 'Welcome to pwrhr, serving all of your power hour needs')
+      1
     end
 
     def paint_song_counter
       write(1, 0, "Song #{@current_song} of #{@total_songs}")
+      1
     end
 
     def paint_now_playing
       write(2, 0, 'Now Playing:')
-      song = if @playing_song.nil?
-               ''
-             else
-               @playing_song.gsub(/^(#{@base_path}|#{File.expand_path(@base_path)})/, '')
-             end
+      song = (@playing_song || '').gsub(/^(#{@base_path}|#{File.expand_path(@base_path)})/, '')
       song.split(File::SEPARATOR).each_with_index do |component, index|
         write(3 + index, 0, "  #{component}")
       end
@@ -332,10 +332,12 @@ module Powerhour
     def paint_elapsed_time_bars
       progress(@elapsed_song_time, @song_duration, @rows - 3)
       progress(@elapsed_session_time, @session_duration, @rows - 2)
+      2
     end
 
     def paint_footer
       write(@rows - 1, 0, 'Enter q to quit, s to skip song, p to toggle play/pause')
+      1
     end
 
     def paint_beer(top_height, bottom_height)

@@ -13,16 +13,12 @@ module Powerhour
   # and accepts user input
   def self.run
     # setup before event loop
-    options = parse_options
     abort 'afplay is required' if %x[which afplay].empty?
+    options = parse_options
+    options[:dir] = File.expand_path(options[:dir])
     song_list = build_file_list(options[:dir])
 
-    gui = Gui.new
-    gui.base_path = options[:dir]
-    gui.session_duration = options[:songs] * options[:duration]
-    gui.song_duration = options[:duration]
-    gui.total_songs = options[:songs]
-
+    gui = Gui.new(options[:dir], options[:duration], options[:songs])
     queue = Queue.new
 
     ph = Game.new(options[:songs], options[:duration], song_list, gui, queue)
@@ -92,9 +88,6 @@ module Powerhour
   # get all of the files in the supplied directory using glob
   def self.build_file_list(dir)
     # find all of the paths in source
-    dir = File.expand_path(dir) unless dir.nil?
-    abort "#{dir} is not a directory" unless File.directory?(dir)
-
     music_files = []
     Find.find(dir) do |path|
       if FileTest.directory?(path)
@@ -274,10 +267,17 @@ module Powerhour
         "'---'",
     ]
 
-    attr_accessor :base_path, :playing_song
-    attr_accessor :session_duration, :elapsed_session_time
-    attr_accessor :song_duration, :elapsed_song_time
-    attr_accessor :total_songs, :current_song
+    attr_accessor :playing_song
+    attr_accessor :elapsed_session_time
+    attr_accessor :elapsed_song_time
+    attr_accessor :current_song
+
+    def initialize(base_path, song_duration, total_songs)
+      @base_path = base_path
+      @session_duration = song_duration * total_songs
+      @song_duration = song_duration
+      @total_songs = total_songs
+    end
 
     # setup the gui
     # pass in a code block that contains the event loop
@@ -322,7 +322,7 @@ module Powerhour
 
     def paint_now_playing
       write(2, 0, 'Now Playing:')
-      song = (@playing_song || '').gsub(/^(#{@base_path}|#{File.expand_path(@base_path)})/, '')
+      song = (@playing_song || '').gsub(/^#{@base_path}/, '')
       song.split(File::SEPARATOR).each_with_index do |component, index|
         write(3 + index, 0, "  #{component}")
       end

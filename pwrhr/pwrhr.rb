@@ -1,6 +1,7 @@
 #!/usr/bin/env ruby
 
 require 'curses'
+require 'find'
 require 'optparse'
 require 'thread'
 require 'timeout'
@@ -94,8 +95,18 @@ module Powerhour
     abort "#{dir} is not a directory" unless File.directory?(dir)
 
     music_files = []
-    Dir.glob("#{dir.chomp('/')}/**/*.{#{MUSIC_FILETYPES.join(',')}}") do |path|
-      music_files << path
+    Find.find(dir) do |path|
+      if FileTest.directory?(path)
+        if File.basename(path)[0] == ?.
+          Find.prune
+        else
+          next
+        end
+      else
+        if File.basename(path) =~ /\.(#{MUSIC_FILETYPES.join('|')})$/
+          music_files << path
+        end
+      end
     end
     music_files
   end

@@ -3,6 +3,7 @@
 require 'curses'
 require 'find'
 require 'optparse'
+require 'shellwords'
 require 'thread'
 require 'timeout'
 
@@ -163,7 +164,7 @@ module Powerhour
     private
 
     def afplay_command(candidate)
-      %Q[afplay -t #{@duration} "#{candidate}"]
+      ['afplay', '-t', @duration.to_s, candidate].shelljoin
     end
 
     # check the state of the child song-playing process over

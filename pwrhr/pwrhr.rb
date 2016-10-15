@@ -56,6 +56,9 @@ module Powerhour
   GETCH_TIMEOUT = 0.1
   MUSIC_FILETYPES = %w[aac m4a mp3 mp4]
 
+  SONG_SUCCESS_CODE = 0
+  SONG_FAILED_CODE = 1
+
   # Parse options into a hash that is also populated with default values
   def self.parse_options
     options = {}
@@ -197,6 +200,11 @@ module Powerhour
       ensure
         Process.exit if @terminate
       end
+      if status.nil?
+        SONG_SUCCESS_CODE
+      else
+        SONG_FAILED_CODE
+      end
     end
 
     # try playing a song for the current minute.
@@ -212,10 +220,10 @@ module Powerhour
       # fork to execute the music command
       begin
         child_pid = Process.spawn(afplay_command(song))
-        monitor_child_process(child_pid)
+        retcode = monitor_child_process(child_pid)
       rescue
-        # there was a failure
-        # this is ok, $? will be nonzero
+        # there was a failure; assign fail code
+        retcode = SONG_FAILED_CODE
       end
 
       unless @playing
@@ -224,6 +232,8 @@ module Powerhour
       if @playlist.empty?
         @playlist = @all_files.shuffle
       end
+
+      retcode
     end
 
     # initialize the thread, which contains the main game loop
@@ -241,8 +251,8 @@ module Powerhour
           # because we want to try a song
           # and stop as soon as one is successful
           begin
-            try_song
-          end while $? != 0 && !@skip && @playing
+            status = try_song
+          end while status != SONG_SUCCESS_CODE && !@skip && @playing
 
           # if we didn't abort because we skipped or paused,
           # the song was successful, so increment the minute

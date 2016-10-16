@@ -13,7 +13,7 @@ module Powerhour
   # and accepts user input
   def self.run
     # setup before event loop
-    abort 'afplay is required' if %x[which afplay].empty?
+    abort 'afplay is required' if %x(which afplay).empty?
     options = parse_options
     options[:dir] = File.expand_path(options[:dir])
     song_list = build_file_list(options[:dir])
@@ -30,15 +30,15 @@ module Powerhour
           input = Timeout.timeout(GETCH_TIMEOUT) { Curses.getch }
         rescue Timeout::Error
           # continue looping
-          input = 10 # noop for input switch
+          input = Curses::Key::ENTER # noop for input switch
         end
 
         case input
-        when Curses::Key::RIGHT, ?s, ?S
+        when Curses::Key::RIGHT, 's', 'S'
           queue << EVENT_SKIP
-        when ?p, ?P
+        when 'p', 'P'
           queue << EVENT_TOGGLE_PAUSE
-        when ?q, ?Q
+        when 'q', 'Q'
           queue << EVENT_QUIT
         else
           # Ignore all other key input
@@ -47,14 +47,13 @@ module Powerhour
     end
   end
 
-  private
   # constants
-  EVENT_SKIP = 'SKIP'
-  EVENT_TOGGLE_PAUSE = 'TOGGLE_PAUSE'
-  EVENT_QUIT = 'QUIT'
+  EVENT_SKIP = 'SKIP'.freeze
+  EVENT_TOGGLE_PAUSE = 'TOGGLE_PAUSE'.freeze
+  EVENT_QUIT = 'QUIT'.freeze
   BUSYWAIT = 0.1
   GETCH_TIMEOUT = 0.1
-  MUSIC_FILETYPES = %w[aac m4a mp3 mp4]
+  MUSIC_FILETYPES = %w(aac m4a mp3 mp4).freeze
 
   SONG_SUCCESS_CODE = 0
   SONG_FAILED_CODE = 1
@@ -63,7 +62,7 @@ module Powerhour
   def self.parse_options
     options = {}
     opt = OptionParser.new do |opts|
-      opts.banner = "Usage: #{$0} [options]\n\npwrhr depends on afplay."
+      opts.banner = "Usage: #{$PROGRAM_NAME} [options]\n\npwrhr depends on afplay."
       options[:songs] = 60
       opts.on('-n', '--num-songs NUMBER', Integer,
               "Number of songs in the power hour (default #{options[:songs]})") do |songs|
@@ -94,46 +93,55 @@ module Powerhour
     music_files = []
     Find.find(dir) do |path|
       if FileTest.directory?(path)
-        if File.basename(path)[0] == ?.
-          Find.prune
-        else
-          next
-        end
-      else
-        if File.basename(path) =~ /\.(#{MUSIC_FILETYPES.join('|')})$/
-          music_files << path
-        end
+        next unless File.basename(path)[0] == '.'
+        Find.prune
+      elsif File.basename(path) =~ /\.(#{MUSIC_FILETYPES.join('|')})$/
+        music_files << path
       end
     end
     music_files
+  end
+
+  class Playlist
+    def initialize(all_files)
+      @all_files = all_files
+      @playlist = all_files.shuffle
+    end
+
+    def fetch
+      @playlist = @all_files.shuffle if @playlist.empty?
+      @playlist.pop
+    end
+
+    def reenqueue(song)
+      @playlist.push(song)
+    end
   end
 
   # This class encapsulates all of the game logic
   # When to play a song, keeping track of the minute,
   # which files are playable, etc.
   class Game
-    attr_accessor :terminate, :skip, :playing
     attr_accessor :num_songs, :duration
-    attr_accessor :all_files, :playlist
+    attr_accessor :playlist
     attr_accessor :gui, :queue
 
     def initialize(num_songs, duration, all_files, gui, queue)
       # initialize game paramters
       @num_songs = num_songs
       @duration = duration
-      @all_files = all_files
-      @playlist = @all_files.shuffle
+      @playlist = Playlist.new(all_files)
       @gui = gui
       @queue = queue
     end
 
     def run
-      @control_thread ||= Thread.new do
-        # initialize control flow bools
-        @terminate = false
-        @skip = false
-        @playing = true
+      # initialize control flow bools
+      @terminate = false
+      @skip = false
+      @playing = true
 
+      @control_thread ||= Thread.new do
         loop do
           case @queue.pop
           when EVENT_SKIP
@@ -157,6 +165,14 @@ module Powerhour
       @thread.status
     end
 
+    def playing?
+      @playing
+    end
+
+    def paused?
+      !@playing
+    end
+
     private
 
     def afplay_command(candidate)
@@ -168,37 +184,33 @@ module Powerhour
     # the minute progresses. It also ensures the child is
     # terminated.
     def monitor_child_process(child_pid)
-      begin
-        start = Time.now
-        status = nil
-        while (delta = Time.now - start) < @duration
-          @gui.elapsed_song_time = delta
-          @gui.elapsed_session_time = @minute * @duration + delta
-          @gui.paint
+      start = Time.now
+      status = nil
+      while (delta = Time.now - start) < @duration
+        @gui.elapsed_song_time = delta
+        @gui.elapsed_session_time = @minute * @duration + delta
+        @gui.paint
 
-          if @terminate || @skip || !@playing
-            Process.kill('SIGKILL', child_pid)
-            break
-          end
-
-          if status.nil?
-            # check if child process has finished
-            _, status = Process.wait2(child_pid, Process::WNOHANG)
-            if status.nil?
-              # no child has finished, so spin
-              sleep BUSYWAIT
-            end
-          elsif status.exitstatus == 0
-            # child completed successfully, but we haven't gone a whole minute
-            # yet, so spin
-            sleep BUSYWAIT
-          else
-            # child errored out, so break out of the loop
-            break
-          end
+        if @terminate || @skip || paused?
+          Process.kill('SIGKILL', child_pid)
+          throw :terminate if @terminate
         end
-      ensure
-        Process.exit if @terminate
+
+        if status.nil?
+          # check if child process has finished
+          _, status = Process.wait2(child_pid, Process::WNOHANG)
+          if status.nil?
+            # no child has finished, so spin
+            sleep BUSYWAIT
+          end
+        elsif status.exitstatus == 0
+          # child completed successfully, but we haven't gone a whole minute
+          # yet, so spin
+          sleep BUSYWAIT
+        else
+          # child errored out, so break out of the loop
+          break
+        end
       end
       if status.nil?
         SONG_SUCCESS_CODE
@@ -209,8 +221,7 @@ module Powerhour
 
     # try playing a song for the current minute.
     # If we are successful, advance the current song index
-    def try_song
-      song = @playlist.pop
+    def try_song(song)
       abort 'No valid songs' if song.nil?
       @gui.playing_song = song
       @gui.elapsed_song_time = 0
@@ -220,45 +231,40 @@ module Powerhour
       # fork to execute the music command
       begin
         child_pid = Process.spawn(afplay_command(song))
-        retcode = monitor_child_process(child_pid)
+        monitor_child_process(child_pid)
       rescue
         # there was a failure; assign fail code
-        retcode = SONG_FAILED_CODE
+        SONG_FAILED_CODE
       end
-
-      unless @playing
-        @playlist.push(song)
-      end
-      if @playlist.empty?
-        @playlist = @all_files.shuffle
-      end
-
-      retcode
     end
 
     # initialize the thread, which contains the main game loop
     def create_music_thread
       Thread.new do
         @index = @minute = 0
-        while @minute < @num_songs do
-          # spin if paused
-          until @playing
-            sleep BUSYWAIT
-            Process.exit if @terminate
+        catch :terminate do
+          while @minute < @num_songs
+            # spin if paused
+            until @playing
+              sleep BUSYWAIT
+              throw :terminate if @terminate
+            end
+
+            song = @playlist.fetch
+            loop do
+              status = try_song(song)
+              break if status == SONG_SUCCESS_CODE
+              break if @skip
+              break if paused?
+            end
+            @playlist.reenqueue(song) if paused?
+
+            # if we didn't abort because we skipped or paused,
+            # the song was successful, so increment the minute
+            # we are on
+            @minute += 1 if !@skip && @playing
+            @skip = false
           end
-
-          # this is a nasty do while loop
-          # because we want to try a song
-          # and stop as soon as one is successful
-          begin
-            status = try_song
-          end while status != SONG_SUCCESS_CODE && !@skip && @playing
-
-          # if we didn't abort because we skipped or paused,
-          # the song was successful, so increment the minute
-          # we are on
-          @minute += 1 if !@skip && @playing
-          @skip = false
         end
       end
     end
@@ -275,7 +281,7 @@ module Powerhour
         '|&&&|',
         '|---|',
         "'---'",
-    ]
+    ].freeze
 
     attr_accessor :playing_song
     attr_accessor :elapsed_session_time
@@ -320,6 +326,7 @@ module Powerhour
     end
 
     private
+
     def paint_banner
       write(0, 0, 'Welcome to pwrhr, serving all of your power hour needs')
       1
@@ -377,22 +384,13 @@ module Powerhour
       progress_bar = ''
       percent = 1.0 * elapsed / duration
       suffix = "[#{format_time elapsed} elapsed / #{format_time duration}]"
-      progress_bar_width = @cols - suffix.length - 2
-      [progress_bar_width, 0].max.times do |i|
-        if i <= percent * progress_bar_width
-          progress_bar << '='
-        else
-          progress_bar << ' '
-        end
-      end
+      progress_bar_width = [@cols - suffix.length - 2, 0].max
+      progress_bar << '=' * (percent * progress_bar_width).to_i
+      progress_bar << ' ' * (progress_bar_width - (percent * progress_bar_width).to_i)
       progress_bar = "|#{progress_bar}|#{suffix}"
       write(output_line, 0, progress_bar)
     end
   end
 end
 
-# run the powerhour if this file is run as a script
-if __FILE__ == $0
-  Powerhour::run
-end
-
+Powerhour.run if __FILE__ == $PROGRAM_NAME

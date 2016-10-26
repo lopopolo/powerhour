@@ -197,12 +197,10 @@ module Powerhour
         end
 
         if status.nil?
+          # no child has finished, so spin
+          sleep BUSYWAIT
           # check if child process has finished
           _, status = Process.wait2(child_pid, Process::WNOHANG)
-          if status.nil?
-            # no child has finished, so spin
-            sleep BUSYWAIT
-          end
         elsif status.exitstatus == 0
           # child completed successfully, but we haven't gone a whole minute
           # yet, so spin
@@ -213,6 +211,8 @@ module Powerhour
         end
       end
       if status.nil?
+        SONG_SUCCESS_CODE
+      elsif status.exitstatus == 0
         SONG_SUCCESS_CODE
       else
         SONG_FAILED_CODE

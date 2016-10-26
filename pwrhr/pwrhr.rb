@@ -2,6 +2,7 @@
 
 require 'curses'
 require 'find'
+require 'id3tag'
 require 'optparse'
 require 'shellwords'
 require 'thread'
@@ -223,7 +224,11 @@ module Powerhour
     # If we are successful, advance the current song index
     def try_song(song)
       abort 'No valid songs' if song.nil?
-      @gui.playing_song = song
+      File.open(song, 'rb') do |f|
+        # @type tags [ID3Tag::Tag]
+        tags = ID3Tag.read(f)
+        @gui.song_info = SongInfo.new(tags.artist, tags.title, tags.album)
+      end
       @gui.elapsed_song_time = 0
       @gui.current_song = @minute + 1
       @gui.paint
@@ -270,6 +275,8 @@ module Powerhour
     end
   end
 
+  SongInfo = Struct.new(:artist, :title, :album)
+
   class Gui
     BEER = [
         ' [=] ',
@@ -283,7 +290,7 @@ module Powerhour
         "'---'",
     ].freeze
 
-    attr_accessor :playing_song
+    attr_accessor :song_info
     attr_accessor :elapsed_session_time
     attr_accessor :elapsed_song_time
     attr_accessor :current_song
@@ -339,11 +346,9 @@ module Powerhour
 
     def paint_now_playing
       write(2, 0, 'Now Playing:')
-      song = (@playing_song || '').gsub(/^#{@base_path}/, '')
-      song.split(File::SEPARATOR).each_with_index do |component, index|
-        write(3 + index, 0, "  #{component}")
-      end
-      1 + song.split(File::SEPARATOR).length
+      write(3, 4, @song_info.title)
+      write(4, 4, "#{@song_info.artist} -- #{@song_info.album}")
+      3
     end
 
     def paint_elapsed_time_bars

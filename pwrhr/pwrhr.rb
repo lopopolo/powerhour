@@ -251,7 +251,7 @@ module Powerhour
       catch :terminate do
         while @minute < @num_songs
           # spin if paused
-          until @playing
+          while paused?
             sleep BUSYWAIT
             throw :terminate if @terminate
           end
@@ -268,7 +268,7 @@ module Powerhour
           # if we didn't abort because we skipped or paused,
           # the song was successful, so increment the minute
           # we are on
-          @minute += 1 if !@skip && @playing
+          @minute += 1 if !@skip && playing?
           @skip = false
         end
       end

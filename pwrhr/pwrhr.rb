@@ -141,6 +141,7 @@ module Powerhour
       @terminate = false
       @skip = false
       @playing = true
+      @minute = 0
 
       @control_thread ||= Thread.new do
         loop do
@@ -157,13 +158,15 @@ module Powerhour
           end
         end
       end
-      @thread ||= create_music_thread
+      @music_thread ||= Thread.new do
+        music_loop
+      end
     end
 
     # return the status of the game thread
     # returns false when the game is over
     def status
-      @thread.status
+      @music_thread.status
     end
 
     def playing?
@@ -243,33 +246,30 @@ module Powerhour
       end
     end
 
-    # initialize the thread, which contains the main game loop
-    def create_music_thread
-      Thread.new do
-        @index = @minute = 0
-        catch :terminate do
-          while @minute < @num_songs
-            # spin if paused
-            until @playing
-              sleep BUSYWAIT
-              throw :terminate if @terminate
-            end
-
-            song = @playlist.fetch
-            loop do
-              status = try_song(song)
-              break if status == SONG_SUCCESS_CODE
-              break if @skip
-              break if paused?
-            end
-            @playlist.reenqueue(song) if paused?
-
-            # if we didn't abort because we skipped or paused,
-            # the song was successful, so increment the minute
-            # we are on
-            @minute += 1 if !@skip && @playing
-            @skip = false
+    # Main game--music playing--loop
+    def music_loop
+      catch :terminate do
+        while @minute < @num_songs
+          # spin if paused
+          until @playing
+            sleep BUSYWAIT
+            throw :terminate if @terminate
           end
+
+          song = @playlist.fetch
+          loop do
+            status = try_song(song)
+            break if status == SONG_SUCCESS_CODE
+            break if @skip
+            break if paused?
+          end
+          @playlist.reenqueue(song) if paused?
+
+          # if we didn't abort because we skipped or paused,
+          # the song was successful, so increment the minute
+          # we are on
+          @minute += 1 if !@skip && @playing
+          @skip = false
         end
       end
     end

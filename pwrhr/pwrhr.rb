@@ -392,8 +392,9 @@ module Powerhour
       percent = 1.0 * elapsed / duration
       suffix = "[#{format_time elapsed} elapsed / #{format_time duration}]"
       progress_bar_width = [@cols - suffix.length - 2, 0].max
-      progress_bar << '=' * (percent * progress_bar_width).to_i
-      progress_bar << ' ' * (progress_bar_width - (percent * progress_bar_width).to_i)
+      filled_in_width = (percent * progress_bar_width).ceil
+      progress_bar << '=' * filled_in_width
+      progress_bar << ' ' * (progress_bar_width - filled_in_width)
       progress_bar = "|#{progress_bar}|#{suffix}"
       write(output_line, 0, progress_bar)
     end

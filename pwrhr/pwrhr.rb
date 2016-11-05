@@ -243,6 +243,8 @@ module Powerhour
       rescue
         # there was a failure; assign fail code
         SONG_FAILED_CODE
+      ensure
+        Process.waitpid(child_pid)
       end
     end
 

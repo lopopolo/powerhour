@@ -92,11 +92,12 @@ module Powerhour
   def self.build_file_list(dir)
     # find all of the paths in source
     music_files = []
+    ext_match = /\.(#{MUSIC_FILETYPES.join('|')})$/
     Find.find(dir) do |path|
       if FileTest.directory?(path)
         next unless File.basename(path)[0] == '.'
         Find.prune
-      elsif File.basename(path) =~ /\.(#{MUSIC_FILETYPES.join('|')})$/
+      elsif File.basename(path) =~ ext_match
         music_files << path
       end
     end

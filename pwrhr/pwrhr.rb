@@ -19,7 +19,7 @@ module Powerhour
     options[:dir] = File.expand_path(options[:dir])
     song_list = build_file_list(options[:dir])
 
-    gui = Gui.new(options[:dir], options[:duration], options[:songs])
+    gui = Gui.new(options[:duration], options[:songs])
     queue = Queue.new
 
     ph = Game.new(options[:songs], options[:duration], song_list, gui, queue)
@@ -295,8 +295,7 @@ module Powerhour
     attr_accessor :elapsed_song_time
     attr_accessor :current_song
 
-    def initialize(base_path, song_duration, total_songs)
-      @base_path = base_path
+    def initialize(song_duration, total_songs)
       @session_duration = song_duration * total_songs
       @song_duration = song_duration
       @total_songs = total_songs

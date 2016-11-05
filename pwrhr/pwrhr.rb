@@ -344,6 +344,7 @@ module Powerhour
     end
 
     def paint_now_playing
+      return 3 if @song_info.nil? || @song_info.title.nil? || @song_info.artist.nil? || @song_info.album.nil?
       write(2, 0, 'Now Playing:')
       write(3, 4, @song_info.title)
       write(4, 4, "#{@song_info.artist} -- #{@song_info.album}")

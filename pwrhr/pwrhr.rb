@@ -265,16 +265,21 @@ module Powerhour
   SongInfo = Struct.new(:artist, :title, :album)
 
   class Gui
+    COLOR_BEER_TOP = 1
+    COLOR_BEER_BOTTLE = 2
+    COLOR_BEER_LABEL = 3
+    COLOR_NORMAL = 4
+
     BEER = [
-      ' [=] ',
-      ' | | ',
-      ' }@{ ',
-      '/   \\',
-      ':___;',
-      '|&&&|',
-      '|&&&|',
-      '|---|',
-      "'---'"
+      [' [=] ', COLOR_BEER_TOP],
+      [' | | ', COLOR_BEER_BOTTLE],
+      [' }@{ ', COLOR_BEER_LABEL],
+      ['/   \\', COLOR_BEER_BOTTLE],
+      [':___;', COLOR_BEER_BOTTLE],
+      ['|&&&|', COLOR_BEER_LABEL],
+      ['|&&&|', COLOR_BEER_LABEL],
+      ['|---|', COLOR_BEER_BOTTLE],
+      ["'---'", COLOR_BEER_BOTTLE]
     ].freeze
 
     attr_accessor :song_info
@@ -296,6 +301,12 @@ module Powerhour
       Curses.stdscr.keypad(true) # enable arrow keys
       Curses.curs_set(0)
       Curses.timeout = GETCH_TIMEOUT
+      Curses.start_color
+      Curses.use_default_colors
+      Curses.init_pair(COLOR_BEER_TOP, Curses::COLOR_WHITE, -1)
+      Curses.init_pair(COLOR_BEER_BOTTLE, Curses::COLOR_YELLOW, -1)
+      Curses.init_pair(COLOR_BEER_LABEL, Curses::COLOR_RED, -1)
+      Curses.init_pair(COLOR_NORMAL, -1, -1)
       begin
         yield
       ensure
@@ -354,16 +365,17 @@ module Powerhour
       avail_height = @rows - top_height - bottom_height
       line = (avail_height - BEER.size) / 2 + top_height
       BEER.each_with_index do |ascii, index|
+        ascii, color = *ascii
         write_col = (@cols - ascii.length) / 2
-        write(line + index, write_col, ascii)
+        write(line + index, write_col, ascii, color)
       end
     end
 
     # A raw write method to the curses display.
     # Always refresh the display after a write.
-    def write(line, col, text)
+    def write(line, col, text, color = COLOR_NORMAL)
       Curses.setpos(line, col)
-      Curses.addstr(text)
+      Curses.attron(Curses.color_pair(color)) { Curses.addstr(text) }
     end
 
     # helper method for formatting time elapsed

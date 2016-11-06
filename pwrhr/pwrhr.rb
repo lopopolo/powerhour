@@ -211,6 +211,7 @@ module Powerhour
         end
       end
       if status.nil?
+        Process.waitpid(child_pid)
         SONG_SUCCESS_CODE
       elsif status.exitstatus.zero?
         SONG_SUCCESS_CODE
@@ -239,8 +240,6 @@ module Powerhour
       rescue
         # there was a failure; assign fail code
         SONG_FAILED_CODE
-      ensure
-        Process.waitpid(child_pid)
       end
     end
 

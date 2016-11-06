@@ -4,6 +4,7 @@ require 'curses'
 require 'find'
 require 'id3tag'
 require 'optparse'
+require 'set'
 require 'shellwords'
 require 'thread'
 require 'timeout'
@@ -92,12 +93,9 @@ module Powerhour
   def self.build_file_list(dir)
     # find all of the paths in source
     music_files = []
-    ext_match = /\.(#{MUSIC_FILETYPES.join('|')})$/
+    ext_suffixes = Set.new(MUSIC_FILETYPES.map { |ext| ".#{ext}" }).freeze
     Find.find(dir) do |path|
-      if FileTest.directory?(path)
-        next unless File.basename(path)[0] == '.'
-        Find.prune
-      elsif File.basename(path) =~ ext_match
+      if ext_suffixes.include?(File.extname(path)) && File.file?(path)
         music_files << path
       end
     end

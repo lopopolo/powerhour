@@ -368,7 +368,7 @@ module Powerhour
 
     # helper method for formatting time elapsed
     def format_time(seconds)
-      Time.at(seconds).utc.strftime('%Hh %Mm %Ss').gsub(/^00h /, '')
+      Time.at(seconds).utc.strftime('%H:%M:%S').gsub(/^00:/, '')
     end
 
     # write a progress bar to the screen

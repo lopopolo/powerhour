@@ -3,6 +3,7 @@ GEM
   specs:
     ast (2.3.0)
     benchmark-ips (2.7.2)
+    curses (1.0.2)
     id3tag (0.8.0)
     parser (2.3.1.4)
       ast (~> 2.2)
@@ -22,8 +23,9 @@ PLATFORMS
 
 DEPENDENCIES
   benchmark-ips
+  curses
   id3tag
   rubocop (~> 0.41.2)
 
 BUNDLED WITH
-   1.13.5
+   1.13.6

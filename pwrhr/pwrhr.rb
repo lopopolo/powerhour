@@ -61,30 +61,28 @@ module Powerhour
 
   # Parse options into a hash that is also populated with default values
   def self.parse_options
-    options = {}
-    opt = OptionParser.new do |opts|
-      opts.banner = "Usage: #{$PROGRAM_NAME} [options]\n\npwrhr depends on afplay."
-      options[:songs] = 60
-      opts.on('-n', '--num-songs NUMBER', Integer,
-              "Number of songs in the power hour (default #{options[:songs]})") do |songs|
-        options[:songs] = songs
-      end
-      options[:duration] = 60
-      opts.on('-d', '--duration SECONDS', Integer,
-              "Duration of each song in seconds (default #{options[:duration]})") do |duration|
-        options[:duration] = duration
-      end
-      options[:dir] = '~/Music/iTunes/iTunes Media/Music'
-      opts.on('-D', '--directory DIR',
-              "Use DIR of music files (default #{options[:dir]})") do |dir|
-        options[:dir] = dir
-      end
+    options = { songs: 60, duration: 60, dir: '~/Music/iTunes/iTunes Media/Music' }
+    ARGV.options do |opts|
+      opts.banner = <<~EOF
+        Usage: #{$PROGRAM_NAME} [options]
+
+        pwrhr depends on the afplay utility.
+
+        OPTIONS
+      EOF
+      opts.on('-n', '--num-songs NUMBER', Integer, 'Number of songs in the power hour') { |val| options[:songs] = val }
+      opts.on('-d', '--duration SECONDS', Integer, 'Duration to play each song in seconds') { |val| options[:duration] = val }
+      opts.on('-D', '--directory DIR', 'Use DIR of music files') { |val| options[:dir] = val }
       opts.on('-h', '--help', 'Display this screen') do
         puts opts
+        puts "\nDEFAULTS"
+        options.each_pair do |option, default|
+          puts "    #{option}: #{default}"
+        end
         exit
       end
+      opts.parse!
     end
-    opt.parse!
     options
   end
 

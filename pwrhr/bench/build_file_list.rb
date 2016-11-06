@@ -86,9 +86,10 @@ def build_file_list6(dir)
 end
 
 
-n = 25
 music_dir = File.expand_path('~/Music/iTunes/iTunes Media/Music')
 Benchmark.ips do |x|
+  x.time = 25
+
   x.report('initial implementation') { build_file_list(music_dir) }
   x.report('move regexp out of hot path') { build_file_list2(music_dir) }
   x.report('no more regexp, File.extname comparo') { build_file_list3(music_dir) }
@@ -101,21 +102,21 @@ end
 
 # Calculating -------------------------------------
 # initial implementation
-#                           0.983  (± 0.0%) i/s -      5.000
+#                           0.975  (± 0.0%) i/s -     25.000
 # move regexp out of hot path
-#                           1.887  (± 0.0%) i/s -     10.000  in   5.298972s
+#                           1.891  (± 0.0%) i/s -     48.000
 # no more regexp, File.extname comparo
-#                           2.038  (± 0.0%) i/s -     11.000  in   5.399178s
+#                           1.985  (± 0.0%) i/s -     50.000
 # no more filter dot directories
-#                           2.082  (± 0.0%) i/s -     11.000  in   5.285365s
+#                           2.084  (± 0.0%) i/s -     53.000
 # reorder File.file? check
-#                           2.095  (± 0.0%) i/s -     11.000  in   5.255089s
-#  ext_suffixes as set      2.106  (± 0.0%) i/s -     11.000
+#                           2.101  (± 0.0%) i/s -     53.000
+#  ext_suffixes as set      2.123  (± 0.0%) i/s -     54.000
 #
 # Comparison:
 #  ext_suffixes as set:        2.1 i/s
 # reorder File.file? check:        2.1 i/s - 1.01x  slower
-# no more filter dot directories:        2.1 i/s - 1.01x  slower
-# no more regexp, File.extname comparo:        2.0 i/s - 1.03x  slower
+# no more filter dot directories:        2.1 i/s - 1.02x  slower
+# no more regexp, File.extname comparo:        2.0 i/s - 1.07x  slower
 # move regexp out of hot path:        1.9 i/s - 1.12x  slower
-# initial implementation:        1.0 i/s - 2.14x  slower
+# initial implementation:        1.0 i/s - 2.18x  slower

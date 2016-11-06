@@ -1,4 +1,5 @@
 #!/usr/bin/env ruby
+# frozen_string_literal: true
 
 require 'curses'
 require 'find'
@@ -42,17 +43,15 @@ module Powerhour
           queue << EVENT_TOGGLE_PAUSE
         when 'q', 'Q'
           queue << EVENT_QUIT
-        else
-          # Ignore all other key input
         end
       end
     end
   end
 
   # constants
-  EVENT_SKIP = 'SKIP'.freeze
-  EVENT_TOGGLE_PAUSE = 'TOGGLE_PAUSE'.freeze
-  EVENT_QUIT = 'QUIT'.freeze
+  EVENT_SKIP = 'SKIP'
+  EVENT_TOGGLE_PAUSE = 'TOGGLE_PAUSE'
+  EVENT_QUIT = 'QUIT'
   BUSYWAIT = 0.1
   GETCH_TIMEOUT = 0.1
   MUSIC_FILETYPES = %w(aac m4a mp3 mp4).freeze
@@ -152,8 +151,6 @@ module Powerhour
           when EVENT_QUIT
             @terminate = true
             break
-          else
-            # ignore all other events
           end
         end
       end
@@ -204,7 +201,7 @@ module Powerhour
           sleep BUSYWAIT
           # check if child process has finished
           _, status = Process.wait2(child_pid, Process::WNOHANG)
-        elsif status.exitstatus == 0
+        elsif status.exitstatus.zero?
           # child completed successfully, but we haven't gone a whole minute
           # yet, so spin
           sleep BUSYWAIT
@@ -215,7 +212,7 @@ module Powerhour
       end
       if status.nil?
         SONG_SUCCESS_CODE
-      elsif status.exitstatus == 0
+      elsif status.exitstatus.zero?
         SONG_SUCCESS_CODE
       else
         SONG_FAILED_CODE
@@ -288,7 +285,7 @@ module Powerhour
       '|&&&|',
       '|&&&|',
       '|---|',
-      "'---'",
+      "'---'"
     ].freeze
 
     attr_accessor :song_info
@@ -387,7 +384,7 @@ module Powerhour
     # write a progress bar to the screen
     def progress(elapsed, duration, output_line)
       return if elapsed.nil? || duration.nil?
-      progress_bar = ''
+      progress_bar = ''.dup
       percent = 1.0 * elapsed / duration
       suffix = "[#{format_time elapsed} elapsed / #{format_time duration}]"
       progress_bar_width = [@cols - suffix.length - 2, 0].max

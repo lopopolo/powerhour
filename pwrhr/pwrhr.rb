@@ -220,6 +220,7 @@ module Powerhour
         @gui.song_info = SongInfo.new(tags.artist, tags.title, tags.album)
       end
       @gui.elapsed_song_time = 0
+      @gui.elapsed_session_time = @minute * @duration
       @gui.current_song = @minute + 1
       @gui.paint
 

@@ -8,7 +8,6 @@ require 'optparse'
 require 'set'
 require 'shellwords'
 require 'thread'
-require 'timeout'
 
 module Powerhour
   # This is the only exposed method in the Powerhour module
@@ -29,14 +28,7 @@ module Powerhour
       ph.run
       # loop while powerhour thread not terminated
       while ph.status
-        begin
-          input = Timeout.timeout(GETCH_TIMEOUT) { Curses.getch }
-        rescue Timeout::Error
-          # continue looping
-          input = Curses::Key::ENTER # noop for input switch
-        end
-
-        case input
+        case Curses.getch
         when Curses::Key::RIGHT, 's', 'S'
           queue << EVENT_SKIP
         when 'p', 'P'
@@ -303,6 +295,7 @@ module Powerhour
       Curses.noecho
       Curses.stdscr.keypad(true) # enable arrow keys
       Curses.curs_set(0)
+      Curses.timeout = GETCH_TIMEOUT
       begin
         yield
       ensure

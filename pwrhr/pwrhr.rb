@@ -107,6 +107,16 @@ module Powerhour
     end
   end
 
+  GameControls = Struct.new(:terminate, :skip, :playing)
+
+  GameProperties = Struct.new(:num_songs, :duration, :minute) do
+    def elapsed_session_time(delta)
+      duration * minute + delta
+    end
+  end
+
+  SongInfo = Struct.new(:artist, :title, :album)
+
   # This class encapsulates all of the game logic
   # When to play a song, keeping track of the minute,
   # which files are playable, etc.
@@ -116,31 +126,26 @@ module Powerhour
     attr_accessor :gui, :queue
 
     def initialize(num_songs, duration, all_files, gui, queue)
-      # initialize game paramters
-      @num_songs = num_songs
-      @duration = duration
+      @props = GameProperties.new(num_songs, duration, 0)
+      @controls = GameControls.new(false, false, true)
       @playlist = Playlist.new(all_files)
       @gui = gui
       @queue = queue
     end
 
     def run
-      # initialize control flow bools
-      @terminate = false
-      @skip = false
-      @playing = true
-      @minute = 0
-
       @control_thread ||= Thread.new do
         loop do
           case @queue.pop
           when EVENT_SKIP
-            @skip = true
+            @controls.skip = true
           when EVENT_TOGGLE_PAUSE
-            @playing = !@playing
+            @controls.playing = !@controls.playing
           when EVENT_QUIT
-            @terminate = true
+            @controls.terminate = true
             break
+          else
+            $stderr.puts('Control thread received invalid event ... ignoring.')
           end
         end
       end
@@ -156,17 +161,17 @@ module Powerhour
     end
 
     def playing?
-      @playing
+      @controls.playing
     end
 
     def paused?
-      !@playing
+      !playing?
     end
 
     private
 
     def afplay_command(candidate)
-      ['afplay', '-t', @duration.to_s, candidate].shelljoin
+      ['afplay', '-t', @props.duration.to_s, candidate].shelljoin
     end
 
     # check the state of the child song-playing process over
@@ -176,14 +181,14 @@ module Powerhour
     def monitor_child_process(child_pid)
       start = Time.now
       status = nil
-      while (delta = Time.now - start) < @duration
+      while (delta = Time.now - start) < @props.duration
         @gui.elapsed_song_time = delta
-        @gui.elapsed_session_time = @minute * @duration + delta
+        @gui.elapsed_session_time = @props.elapsed_session_time(delta)
         @gui.paint
 
-        if @terminate || @skip || paused?
+        if @controls.terminate || @controls.skip || paused?
           Process.kill('SIGKILL', child_pid)
-          throw :terminate if @terminate
+          throw :terminate if @controls.terminate
         end
 
         if status.nil?
@@ -220,8 +225,8 @@ module Powerhour
         @gui.song_info = SongInfo.new(tags.artist, tags.title, tags.album)
       end
       @gui.elapsed_song_time = 0
-      @gui.elapsed_session_time = @minute * @duration
-      @gui.current_song = @minute + 1
+      @gui.elapsed_session_time = @props.elapsed_session_time(0)
+      @gui.current_song = @props.minute + 1
       @gui.paint
 
       # fork to execute the music command
@@ -237,18 +242,18 @@ module Powerhour
     # Main game--music playing--loop
     def music_loop
       catch :terminate do
-        while @minute < @num_songs
+        while @props.minute < @props.num_songs
           # spin if paused
           while paused?
             sleep BUSYWAIT
-            throw :terminate if @terminate
+            throw :terminate if @controls.terminate
           end
 
           song = @playlist.fetch
           loop do
             status = try_song(song)
             break if status == SONG_SUCCESS_CODE
-            break if @skip
+            break if @controls.skip
             break if paused?
           end
           @playlist.reenqueue(song) if paused?
@@ -256,14 +261,12 @@ module Powerhour
           # if we didn't abort because we skipped or paused,
           # the song was successful, so increment the minute
           # we are on
-          @minute += 1 if !@skip && playing?
-          @skip = false
+          @props.minute += 1 if !@controls.skip && playing?
+          @controls.skip = false
         end
       end
     end
   end
-
-  SongInfo = Struct.new(:artist, :title, :album)
 
   class Gui
     COLOR_BEER_TOP = 1
@@ -292,6 +295,10 @@ module Powerhour
       @session_duration = song_duration * total_songs
       @song_duration = song_duration
       @total_songs = total_songs
+      @current_song = nil
+      @song_info = SongInfo.new(nil, nil, nil)
+      @elapsed_song_time = 0
+      @elapsed_session_time = 0
     end
 
     # setup the gui
@@ -339,15 +346,16 @@ module Powerhour
     end
 
     def paint_song_counter
-      write(1, 0, "Song #{@current_song} of #{@total_songs}")
+      write(1, 0, "Song #{@current_song} of #{@total_songs}") unless @current_song.nil? || @total_songs.nil?
       1
     end
 
     def paint_now_playing
-      return 3 if @song_info.nil? || @song_info.title.nil? || @song_info.artist.nil? || @song_info.album.nil?
       write(2, 0, 'Now Playing:')
-      write(3, 4, @song_info.title)
-      write(4, 4, "#{@song_info.artist} -- #{@song_info.album}")
+      unless @song_info.nil?
+        write(3, 4, @song_info.title) unless @song_info.title.nil?
+        write(4, 4, "#{@song_info.artist} -- #{@song_info.album}") unless @song_info.artist.nil? || @song_info.album.nil?
+      end
       3
     end
 

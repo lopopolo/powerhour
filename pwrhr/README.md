@@ -8,8 +8,6 @@ It is decently configurable. These are the options `pwrhr.rb` supports
 $ ./pwrhr.rb -h
 Usage: ./pwrhr.rb [options]
 
-pwrhr depends on the afplay utility.
-
 OPTIONS
     -n, --num-songs NUMBER           Number of songs in the power hour
     -d, --duration SECONDS           Duration to play each song in seconds
@@ -22,11 +20,8 @@ DEFAULTS
     dir: ~/Music/iTunes/iTunes Media/Music
 ```
 
-I designed this script to run on a Mac because OS X 10.5+ includes
-the `afplay` utility which can play any file QuickTime supports.
-
 By default, the Mac iTunes music folder is scanned for music files
-(aac, m4a, mp3, mp4). You may supply an alternate directory via the
+(mp3 only). You may supply an alternate directory via the
 `-D` switch.
 
 To prevent your mac from sleeping or turning off the display during a

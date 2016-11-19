@@ -53,8 +53,6 @@ module Powerhour
       opts.banner = <<~EOF
         Usage: #{$PROGRAM_NAME} [options]
 
-        pwrhr depends on the afplay utility.
-
         OPTIONS
       EOF
       opts.on('-n', '--num-songs NUMBER', Integer, 'Number of songs in the power hour') { |val| options[:songs] = val }

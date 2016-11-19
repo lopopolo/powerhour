@@ -28,3 +28,10 @@ the `afplay` utility which can play any file QuickTime supports.
 By default, the Mac iTunes music folder is scanned for music files
 (aac, m4a, mp3, mp4). You may supply an alternate directory via the
 `-D` switch.
+
+To prevent your mac from sleeping or turning off the display during a
+power hour, invoke pwrhr.rb like this:
+
+```bash
+caffeinate -i -d ./pwrhr.rb
+```

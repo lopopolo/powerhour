@@ -2,6 +2,7 @@ GEM
   remote: https://rubygems.org/
   specs:
     ast (2.3.0)
+    audite (0.4.0)
     benchmark-ips (2.7.2)
     curses (1.0.2)
     id3tag (0.8.0)
@@ -22,6 +23,7 @@ PLATFORMS
   ruby
 
 DEPENDENCIES
+  audite
   benchmark-ips
   curses
   id3tag

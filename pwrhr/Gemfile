@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 source 'https://rubygems.org'
 
+gem 'audite'
 gem 'benchmark-ips'
 gem 'curses'
 gem 'id3tag'

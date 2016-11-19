@@ -1,6 +1,7 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: true
 
+require 'audite'
 require 'curses'
 require 'find'
 require 'id3tag'
@@ -46,7 +47,7 @@ module Powerhour
   EVENT_QUIT = 'QUIT'
   BUSYWAIT = 0.1
   GETCH_TIMEOUT = 0.1
-  MUSIC_FILETYPES = %w(aac m4a mp3 mp4).freeze
+  MUSIC_FILETYPES = %w(mp3).freeze
 
   SONG_SUCCESS_CODE = 0
   SONG_FAILED_CODE = 1
@@ -109,9 +110,25 @@ module Powerhour
 
   GameControls = Struct.new(:terminate, :skip, :playing)
 
-  GameProperties = Struct.new(:num_songs, :duration, :minute) do
-    def elapsed_session_time(delta)
-      duration * minute + delta
+  GameProperties = Struct.new(:num_songs, :duration, :minute, :song_start, :game_start, :song_pause_offset) do
+    def song_delta
+      Time.now - song_start - song_pause_offset
+    end
+
+    def game_delta
+      @game_pause_offset ||= 0
+      Time.now - game_start - @game_pause_offset
+    end
+
+    def start_pause
+      @paused_at = Time.now
+    end
+
+    def end_pause
+      offset = Time.now - @paused_at
+      self.song_pause_offset += offset
+      @game_pause_offset ||= 0
+      @game_pause_offset += offset
     end
   end
 
@@ -122,15 +139,23 @@ module Powerhour
   # which files are playable, etc.
   class Game
     attr_accessor :num_songs, :duration
-    attr_accessor :playlist
+    attr_accessor :playlist, :player
     attr_accessor :gui, :queue
 
     def initialize(num_songs, duration, all_files, gui, queue)
-      @props = GameProperties.new(num_songs, duration, 0)
+      @props = GameProperties.new(num_songs, duration, 0, Time.now, Time.now, 0)
       @controls = GameControls.new(false, false, true)
       @playlist = Playlist.new(all_files)
       @gui = gui
       @queue = queue
+
+      @player = Audite.new
+      @player.events.on(:position_change) do
+        delta = @props.song_delta
+        @gui.elapsed_song_time = delta
+        @gui.elapsed_session_time = @props.game_delta
+        @gui.paint
+      end
     end
 
     def run
@@ -183,7 +208,7 @@ module Powerhour
       status = nil
       while (delta = Time.now - start) < @props.duration
         @gui.elapsed_song_time = delta
-        @gui.elapsed_session_time = @props.elapsed_session_time(delta)
+        @gui.elapsed_session_time = @props.game_delta
         @gui.paint
 
         if @controls.terminate || @controls.skip || paused?
@@ -216,27 +241,29 @@ module Powerhour
     end
 
     # try playing a song for the current minute.
-    # If we are successful, advance the current song index
-    def try_song(song)
-      abort 'No valid songs' if song.nil?
+    def try_song(song, player_should_resume)
       File.open(song, 'rb') do |f|
         # @type tags [ID3Tag::Tag]
         tags = ID3Tag.read(f)
         @gui.song_info = SongInfo.new(tags.artist, tags.title, tags.album)
       end
       @gui.elapsed_song_time = 0
-      @gui.elapsed_session_time = @props.elapsed_session_time(0)
+      @gui.elapsed_session_time = @props.game_delta
       @gui.current_song = @props.minute + 1
       @gui.paint
 
-      # fork to execute the music command
-      begin
-        child_pid = Process.spawn(afplay_command(song))
-        monitor_child_process(child_pid)
-      rescue
-        # there was a failure; assign fail code
-        SONG_FAILED_CODE
+      player.load(song) unless player_should_resume
+      player.toggle
+
+      while @props.song_delta < @props.duration
+        break if paused? || @controls.skip
+        throw :terminate if @controls.terminate
+        sleep BUSYWAIT
       end
+
+      player.stop_stream
+
+      SONG_SUCCESS_CODE
     end
 
     # Main game--music playing--loop
@@ -244,19 +271,29 @@ module Powerhour
       catch :terminate do
         while @props.minute < @props.num_songs
           # spin if paused
+          player_should_resume = paused?
           while paused?
             sleep BUSYWAIT
             throw :terminate if @controls.terminate
           end
+          if player_should_resume
+            @props.end_pause
+          else
+            @props.song_start = Time.now
+            @props.song_pause_offset = 0
+          end
 
           song = @playlist.fetch
           loop do
-            status = try_song(song)
+            status = try_song(song, player_should_resume)
             break if status == SONG_SUCCESS_CODE
             break if @controls.skip
             break if paused?
           end
-          @playlist.reenqueue(song) if paused?
+          if paused?
+            @playlist.reenqueue(song)
+            @props.start_pause
+          end
 
           # if we didn't abort because we skipped or paused,
           # the song was successful, so increment the minute
@@ -399,9 +436,9 @@ module Powerhour
       percent = 1.0 * elapsed / duration
       suffix = "[#{format_time elapsed} elapsed / #{format_time duration}]"
       progress_bar_width = [@cols - suffix.length - 2, 0].max
-      filled_in_width = (percent * progress_bar_width).ceil
+      filled_in_width = [(percent * progress_bar_width).ceil, progress_bar_width].min
       progress_bar << '=' * filled_in_width
-      progress_bar << ' ' * (progress_bar_width - filled_in_width)
+      progress_bar << ' ' * [(progress_bar_width - filled_in_width), 0].max
       progress_bar = "|#{progress_bar}|#{suffix}"
       write(output_line, 0, progress_bar)
     end

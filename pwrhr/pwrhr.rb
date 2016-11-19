@@ -7,7 +7,6 @@ require 'find'
 require 'id3tag'
 require 'optparse'
 require 'set'
-require 'shellwords'
 require 'thread'
 
 module Powerhour
@@ -16,9 +15,7 @@ module Powerhour
   # and accepts user input
   def self.run
     # setup before event loop
-    abort 'afplay is required' if %x(which afplay).empty?
     options = parse_options
-    options[:dir] = File.expand_path(options[:dir])
     song_list = build_file_list(options[:dir])
 
     gui = Gui.new(options[:duration], options[:songs])
@@ -49,9 +46,6 @@ module Powerhour
   GETCH_TIMEOUT = 0.1
   MUSIC_FILETYPES = %w(mp3).freeze
 
-  SONG_SUCCESS_CODE = 0
-  SONG_FAILED_CODE = 1
-
   # Parse options into a hash that is also populated with default values
   def self.parse_options
     options = { songs: 60, duration: 60, dir: '~/Music/iTunes/iTunes Media/Music' }
@@ -76,6 +70,7 @@ module Powerhour
       end
       opts.parse!
     end
+    options[:dir] = File.expand_path(options[:dir])
     options
   end
 
@@ -110,29 +105,34 @@ module Powerhour
 
   GameControls = Struct.new(:terminate, :skip, :playing)
 
-  GameProperties = Struct.new(:num_songs, :duration, :minute, :song_start, :game_start, :song_pause_offset) do
-    def song_delta
-      Time.now - song_start - song_pause_offset
-    end
-
-    def game_delta
-      @game_pause_offset ||= 0
-      Time.now - game_start - @game_pause_offset
-    end
-
-    def start_pause
-      @paused_at = Time.now
-    end
-
-    def end_pause
-      offset = Time.now - @paused_at
-      self.song_pause_offset += offset
-      @game_pause_offset ||= 0
-      @game_pause_offset += offset
-    end
-  end
+  GameProperties = Struct.new(:num_songs, :duration, :minute)
 
   SongInfo = Struct.new(:artist, :title, :album)
+
+  class ElapsedTime
+    def initialize(start = Time.now)
+      @start = start
+      @offset = 0
+      @stop_time = nil
+    end
+
+    def elapsed
+      Time.now - @start - @offset
+    end
+
+    def start
+      @offset += Time.now - @stop_time
+      @stop_time = nil
+    end
+
+    def stop
+      @stop_time = Time.now
+    end
+
+    def erase(time)
+      @offset += time
+    end
+  end
 
   # This class encapsulates all of the game logic
   # When to play a song, keeping track of the minute,
@@ -143,7 +143,8 @@ module Powerhour
     attr_accessor :gui, :queue
 
     def initialize(num_songs, duration, all_files, gui, queue)
-      @props = GameProperties.new(num_songs, duration, 0, Time.now, Time.now, 0)
+      @props = GameProperties.new(num_songs, duration, 0)
+      @timers = { game: ElapsedTime.new, song: nil }
       @controls = GameControls.new(false, false, true)
       @playlist = Playlist.new(all_files)
       @gui = gui
@@ -151,9 +152,8 @@ module Powerhour
 
       @player = Audite.new
       @player.events.on(:position_change) do
-        delta = @props.song_delta
-        @gui.elapsed_song_time = delta
-        @gui.elapsed_session_time = @props.game_delta
+        @gui.elapsed_song_time = @timers[:song].elapsed
+        @gui.elapsed_session_time = @timers[:game].elapsed
         @gui.paint
       end
     end
@@ -195,75 +195,27 @@ module Powerhour
 
     private
 
-    def afplay_command(candidate)
-      ['afplay', '-t', @props.duration.to_s, candidate].shelljoin
-    end
-
-    # check the state of the child song-playing process over
-    # the course of the minute. This method updates the gui as
-    # the minute progresses. It also ensures the child is
-    # terminated.
-    def monitor_child_process(child_pid)
-      start = Time.now
-      status = nil
-      while (delta = Time.now - start) < @props.duration
-        @gui.elapsed_song_time = delta
-        @gui.elapsed_session_time = @props.game_delta
-        @gui.paint
-
-        if @controls.terminate || @controls.skip || paused?
-          Process.kill('SIGKILL', child_pid)
-          throw :terminate if @controls.terminate
-        end
-
-        if status.nil?
-          # no child has finished, so spin
-          sleep BUSYWAIT
-          # check if child process has finished
-          _, status = Process.wait2(child_pid, Process::WNOHANG)
-        elsif status.exitstatus.zero?
-          # child completed successfully, but we haven't gone a whole minute
-          # yet, so spin
-          sleep BUSYWAIT
-        else
-          # child errored out, so break out of the loop
-          break
-        end
-      end
-      if status.nil?
-        Process.waitpid(child_pid)
-        SONG_SUCCESS_CODE
-      elsif status.exitstatus.zero?
-        SONG_SUCCESS_CODE
-      else
-        SONG_FAILED_CODE
-      end
-    end
-
-    # try playing a song for the current minute.
-    def try_song(song, player_should_resume)
+    def run_minute(song, player_should_resume)
       File.open(song, 'rb') do |f|
         # @type tags [ID3Tag::Tag]
         tags = ID3Tag.read(f)
         @gui.song_info = SongInfo.new(tags.artist, tags.title, tags.album)
       end
       @gui.elapsed_song_time = 0
-      @gui.elapsed_session_time = @props.game_delta
+      @gui.elapsed_session_time = @timers[:game].elapsed
       @gui.current_song = @props.minute + 1
       @gui.paint
 
       player.load(song) unless player_should_resume
       player.toggle
 
-      while @props.song_delta < @props.duration
+      while @timers[:song].elapsed < @props.duration
         break if paused? || @controls.skip
         throw :terminate if @controls.terminate
         sleep BUSYWAIT
       end
 
       player.stop_stream
-
-      SONG_SUCCESS_CODE
     end
 
     # Main game--music playing--loop
@@ -277,23 +229,20 @@ module Powerhour
             throw :terminate if @controls.terminate
           end
           if player_should_resume
-            @props.end_pause
+            @timers[:song].start
+            @timers[:game].start
           else
-            @props.song_start = Time.now
-            @props.song_pause_offset = 0
+            @timers[:song] = ElapsedTime.new
           end
 
           song = @playlist.fetch
-          loop do
-            status = try_song(song, player_should_resume)
-            break if status == SONG_SUCCESS_CODE
-            break if @controls.skip
-            break if paused?
-          end
+          run_minute(song, player_should_resume)
           if paused?
             @playlist.reenqueue(song)
-            @props.start_pause
+            @timers[:song].stop
+            @timers[:game].stop
           end
+          @timers[:game].erase(@timers[:song].elapsed) if @controls.skip
 
           # if we didn't abort because we skipped or paused,
           # the song was successful, so increment the minute

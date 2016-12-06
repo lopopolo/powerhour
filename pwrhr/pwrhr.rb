@@ -26,14 +26,18 @@ module Powerhour
       ph.run
       # loop while powerhour thread not terminated
       while ph.status
-        case Curses.getch
-        when Curses::Key::RIGHT, 's', 'S'
-          queue << EVENT_SKIP
-        when 'p', 'P'
-          queue << EVENT_TOGGLE_PAUSE
-        when 'q', 'Q'
-          queue << EVENT_QUIT
-        end
+        event =
+          case Curses.getch
+          when Curses::Key::RIGHT, 's', 'S'
+            EVENT_SKIP
+          when 'p', 'P'
+            EVENT_TOGGLE_PAUSE
+          when 'q', 'Q'
+            EVENT_QUIT
+          else
+            EVENT_NOOP
+          end
+        queue << event if event != EVENT_NOOP
       end
     end
   end
@@ -42,6 +46,7 @@ module Powerhour
   EVENT_SKIP = 'SKIP'
   EVENT_TOGGLE_PAUSE = 'TOGGLE_PAUSE'
   EVENT_QUIT = 'QUIT'
+  EVENT_NOOP = 'NOOP'
   BUSYWAIT = 0.1
   GETCH_TIMEOUT = 0.1
   MUSIC_FILETYPES = %w(mp3).freeze
@@ -167,6 +172,8 @@ module Powerhour
           when EVENT_QUIT
             @controls.terminate = true
             break
+          when EVENT_NOOP
+            # noop
           else
             $stderr.puts('Control thread received invalid event ... ignoring.')
           end

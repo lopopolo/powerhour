@@ -49,7 +49,7 @@ module Powerhour
   EVENT_NOOP = 'NOOP'
   BUSYWAIT = 0.1
   GETCH_TIMEOUT = 0.1
-  MUSIC_FILETYPES = %w(mp3).freeze
+  MUSIC_FILETYPES = %w[mp3].freeze
 
   # Parse options into a hash that is also populated with default values
   def self.parse_options
@@ -174,6 +174,7 @@ module Powerhour
             break
           when EVENT_NOOP
             # noop
+            nil
           else
             $stderr.puts('Control thread received invalid event ... ignoring.')
           end
@@ -399,4 +400,4 @@ module Powerhour
   end
 end
 
-Powerhour.run if __FILE__ == $PROGRAM_NAME
+Powerhour.run if $PROGRAM_NAME == __FILE__

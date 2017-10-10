@@ -55,11 +55,11 @@ module Powerhour
   def self.parse_options
     options = { songs: 60, duration: 60, dir: '~/Music/iTunes/iTunes Media/Music' }
     ARGV.options do |opts|
-      opts.banner = <<~EOF
+      opts.banner = <<~BANNER
         Usage: #{$PROGRAM_NAME} [options]
 
         OPTIONS
-      EOF
+      BANNER
       opts.on('-n', '--num-songs NUMBER', Integer, 'Number of songs in the power hour') { |val| options[:songs] = val }
       opts.on('-d', '--duration SECONDS', Integer, 'Duration to play each song in seconds') { |val| options[:duration] = val }
       opts.on('-D', '--directory DIR', 'Use DIR of music files') { |val| options[:dir] = val }
@@ -387,7 +387,7 @@ module Powerhour
     # write a progress bar to the screen
     def progress(elapsed, duration, output_line)
       return if elapsed.nil? || duration.nil?
-      progress_bar = ''.dup
+      progress_bar = +''
       percent = 1.0 * elapsed / duration
       suffix = "[#{format_time elapsed} elapsed / #{format_time duration}]"
       progress_bar_width = [@cols - suffix.length - 2, 0].max

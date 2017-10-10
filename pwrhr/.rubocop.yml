@@ -19,7 +19,7 @@ AllCops:
 Layout/AccessModifierIndentation:
   Enabled: true
 # Check the naming of accessor methods for get_/set_.
-Style/AccessorMethodName:
+Naming/AccessorMethodName:
   Enabled: false
 # Use alias_method instead of alias.
 Style/Alias:
@@ -38,7 +38,7 @@ Style/ArrayJoin:
 Style/AsciiComments:
   Enabled: true
 # Use only ascii symbols in identifiers.
-Style/AsciiIdentifiers:
+Naming/AsciiIdentifiers:
   Enabled: true
 # Checks for uses of Module#attr.
 Style/Attr:
@@ -63,7 +63,7 @@ Layout/CaseIndentation:
 Style/CharacterLiteral:
   Enabled: true
 # Use CamelCase for classes and modules.'
-Style/ClassAndModuleCamelCase:
+Naming/ClassAndModuleCamelCase:
   Enabled: true
 # Checks style of children classes and modules.
 Style/ClassAndModuleChildren:
@@ -85,7 +85,7 @@ Style/CommandLiteral:
 Layout/CommentIndentation:
   Enabled: true
 # Constants should use SCREAMING_SNAKE_CASE.
-Style/ConstantName:
+Naming/ConstantName:
   Enabled: true
 # Use def with parentheses when there are arguments.
 Style/DefWithParentheses:
@@ -127,7 +127,7 @@ Layout/EndOfLine:
 Style/EvenOdd:
   Enabled: true
 # Use snake_case for source file names.
-Style/FileName:
+Naming/FileName:
   Enabled: true
 # Checks for a line break before the first parameter in a multi-line method
 # parameter definition.
@@ -179,7 +179,7 @@ Layout/LeadingCommentSpace:
 Style/MethodDefParentheses:
   Enabled: true
 # Use the configured style when naming methods.
-Style/MethodName:
+Naming/MethodName:
   Enabled: true
 # Checks for usage of `extend self` in modules.
 Style/ModuleFunction:
@@ -247,7 +247,7 @@ Style/NumericLiterals:
 Style/OneLineConditional:
   Enabled: true
 # When defining binary operators, name the argument other.
-Style/OpMethod:
+Naming/BinaryOperatorParameterName:
   Enabled: true
 # Don't use parentheses around the condition of an if/unless/while.
 Style/ParenthesesAroundCondition:
@@ -337,11 +337,11 @@ Style/UnneededPercentQ:
 Style/VariableInterpolation:
   Enabled: true
 # Use the configured style when naming variables.
-Style/VariableName:
+Naming/VariableName:
   EnforcedStyle: snake_case
   Enabled: true
 # Use the configured style when numbering variables.
-Style/VariableNumber:
+Naming/VariableNumber:
   Enabled: false
 # Use when x then ... for one-line cases.
 Style/WhenThen:

@@ -7,7 +7,6 @@ require 'find'
 require 'id3tag'
 require 'optparse'
 require 'set'
-require 'thread'
 
 module Powerhour
   # This is the only exposed method in the Powerhour module
@@ -22,8 +21,8 @@ module Powerhour
     queue = Queue.new
 
     ph = Game.new(options[:songs], options[:duration], song_list, gui, queue)
+    ph.run
     Gui.init_screen do
-      ph.run
       # loop while powerhour thread not terminated
       while ph.status
         event =
@@ -176,13 +175,14 @@ module Powerhour
             # noop
             nil
           else
-            $stderr.puts('Control thread received invalid event ... ignoring.')
+            $stderr.warn('Control thread received invalid event ... ignoring.')
           end
         end
       end
       @music_thread ||= Thread.new do
         music_loop
       end
+      nil
     end
 
     # return the status of the game thread

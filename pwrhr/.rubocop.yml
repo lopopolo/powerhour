@@ -403,20 +403,20 @@ Lint/IneffectiveAccessModifier:
 Lint/AmbiguousOperator:
   Enabled: true
 # Align block ends correctly.
-Lint/BlockAlignment:
+Layout/BlockAlignment:
   Enabled: true
 # Default values in optional keyword arguments and optional ordinal arguments
 # should not refer back to the name of the argument.
 Lint/CircularArgumentReference:
   Enabled: true
 # Checks for condition placed in a confusing position relative to the keyword.
-Lint/ConditionPosition:
+Layout/ConditionPosition:
   Enabled: true
 # Check for debugger calls.
 Lint/Debugger:
   Enabled: true
 # Align ends corresponding to defs correctly.
-Lint/DefEndAlignment:
+Layout/DefEndAlignment:
   Enabled: true
 # Check for deprecated class method calls.
 Lint/DeprecatedClassMethods:
@@ -431,7 +431,7 @@ Lint/ElseLayout:
 Lint/EmptyEnsure:
   Enabled: true
 # Align ends correctly.
-Lint/EndAlignment:
+Layout/EndAlignment:
   Enabled: true
 # END blocks should not be placed inside method definitions.
 Lint/EndInMethod:
@@ -451,13 +451,6 @@ Lint/FormatParameterMismatch:
 # Checks for adjacent string literals on the same line, which could better be
 # represented as a single string literal.
 Lint/ImplicitStringConcatenation:
-  Enabled: true
-# Checks for invalid character literals with a non-escaped whitespace
-# character.
-Lint/InvalidCharacterLiteral:
-  Enabled: true
-# Checks of literals used in conditions.
-Lint/LiteralInCondition:
   Enabled: true
 # Checks for literals used in interpolation.
 Lint/LiteralInInterpolation:
@@ -490,11 +483,6 @@ Lint/StringConversionInInterpolation:
 # Do not use prefix `_` for a variable that is used.
 Lint/UnderscorePrefixedVariableName:
   Enabled: true
-# Checks for rubocop:disable comments that can be removed.
-# Note: this cop is not disabled when disabling all cops.
-# It must be explicitly disabled.
-Lint/UnneededDisable:
-  Enabled: false
 # Unreachable code.
 Lint/UnreachableCode:
   Enabled: true

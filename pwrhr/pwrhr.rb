@@ -217,6 +217,7 @@ module Powerhour
 
       while @timers[:song].elapsed < @props.duration
         break if paused? || @controls.skip
+
         throw :terminate if @controls.terminate
         sleep BUSYWAIT
       end
@@ -387,6 +388,7 @@ module Powerhour
     # write a progress bar to the screen
     def progress(elapsed, duration, output_line)
       return if elapsed.nil? || duration.nil?
+
       progress_bar = +''
       percent = 1.0 * elapsed / duration
       suffix = "[#{format_time elapsed} elapsed / #{format_time duration}]"

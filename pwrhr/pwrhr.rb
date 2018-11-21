@@ -19,6 +19,29 @@ module Powerhour
 
     def self.main
       options = parse_options(ARGV)
+      playlist = Source.new(options.source_path).playlist
+      gui = Gui.new(options.duration, options.count)
+      queue = Queue.new
+
+      game = Game.new(options.count, options.duration, playlist, gui, queue)
+      game.run
+      Gui.init_screen do
+        # loop while power hour thread not terminated
+        while game.status
+          event =
+            case Curses.getch
+            when Curses::Key::RIGHT, 's', 'S'
+              EVENT_SKIP
+            when 'p', 'P'
+              EVENT_TOGGLE_PAUSE
+            when 'q', 'Q'
+              EVENT_QUIT
+            else
+              EVENT_NOOP
+            end
+          queue << event if event != EVENT_NOOP
+        end
+      end
     end
 
     def self.parse_options(args)
@@ -53,38 +76,6 @@ module Powerhour
     end
   end
 
-  # This is the only exposed method in the Powerhour module
-  # This method parses command line options, sets up the game,
-  # and accepts user input
-  def self.run
-    # setup before event loop
-    options = Runner.parse_options(ARGV)
-    song_list = build_file_list(options.source_path)
-
-    gui = Gui.new(options.duration, options.count)
-    queue = Queue.new
-
-    ph = Game.new(options.count, options.duration, song_list, gui, queue)
-    ph.run
-    Gui.init_screen do
-      # loop while powerhour thread not terminated
-      while ph.status
-        event =
-          case Curses.getch
-          when Curses::Key::RIGHT, 's', 'S'
-            EVENT_SKIP
-          when 'p', 'P'
-            EVENT_TOGGLE_PAUSE
-          when 'q', 'Q'
-            EVENT_QUIT
-          else
-            EVENT_NOOP
-          end
-        queue << event if event != EVENT_NOOP
-      end
-    end
-  end
-
   # constants
   EVENT_SKIP = 'SKIP'
   EVENT_TOGGLE_PAUSE = 'TOGGLE_PAUSE'
@@ -92,30 +83,35 @@ module Powerhour
   EVENT_NOOP = 'NOOP'
   BUSYWAIT = 0.1
   GETCH_TIMEOUT = 0.1
-  MUSIC_FILETYPES = %w[mp3].freeze
 
-  # get all of the files in the supplied directory using glob
-  def self.build_file_list(dir)
-    # find all of the paths in source
-    music_files = []
-    ext_suffixes = Set.new(MUSIC_FILETYPES.map { |ext| ".#{ext}" }).freeze
-    Find.find(dir) do |path|
-      next unless ext_suffixes.include?(File.extname(path).downcase)
-      next unless File.file?(path)
+  class Source
+    EXT = Set.new(%w[.mp3]).freeze
 
-      music_files << path
+    def initialize(path)
+      @path = path
     end
-    music_files
+
+    def playlist
+      sources = []
+      Find.find(@path) do |path|
+        path = Pathname.new(path)
+        next unless EXT.include?(path.extname.downcase)
+        next unless path.file?
+
+        sources << path
+      end
+      Playlist.new(sources)
+    end
   end
 
   class Playlist
-    def initialize(all_files)
-      @all_files = all_files
-      @playlist = all_files.shuffle
+    def initialize(sources)
+      @sources = sources
+      @playlist = sources.shuffle
     end
 
     def fetch
-      @playlist = @all_files.shuffle if @playlist.empty?
+      @playlist = @sources.shuffle if @playlist.empty?
       @playlist.pop
     end
 
@@ -163,11 +159,11 @@ module Powerhour
     attr_accessor :playlist, :player
     attr_accessor :gui, :queue
 
-    def initialize(num_songs, duration, all_files, gui, queue)
+    def initialize(num_songs, duration, playlist, gui, queue)
       @props = GameProperties.new(num_songs, duration, 0)
       @timers = { game: ElapsedTime.new, song: nil }
       @controls = GameControls.new(false, false, true)
-      @playlist = Playlist.new(all_files)
+      @playlist = playlist
       @gui = gui
       @queue = queue
 
@@ -231,7 +227,7 @@ module Powerhour
       @gui.current_song = @props.minute + 1
       @gui.paint
 
-      player.load(song) unless player_should_resume
+      player.load(song.to_path) unless player_should_resume
       player.toggle
 
       while @timers[:song].elapsed < @props.duration
@@ -421,4 +417,4 @@ module Powerhour
   end
 end
 
-Powerhour.run if $PROGRAM_NAME == __FILE__
+Powerhour::Runner.main if $PROGRAM_NAME == __FILE__

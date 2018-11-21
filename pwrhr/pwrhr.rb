@@ -82,9 +82,10 @@ module Powerhour
     music_files = []
     ext_suffixes = Set.new(MUSIC_FILETYPES.map { |ext| ".#{ext}" }).freeze
     Find.find(dir) do |path|
-      if ext_suffixes.include?(File.extname(path)) && File.file?(path)
-        music_files << path
-      end
+      next unless ext_suffixes.include?(File.extname(path))
+      next unless File.file?(path)
+
+      music_files << path
     end
     music_files
   end

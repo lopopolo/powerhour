@@ -6,21 +6,65 @@ require 'curses'
 require 'find'
 require 'id3tag'
 require 'optparse'
+require 'pathname'
 require 'set'
 
 module Powerhour
+  class Runner
+    Options = Struct.new(:count, :duration, :source, keyword_init: true) do
+      def source_path
+        Pathname.new(source).expand_path
+      end
+    end
+
+    def self.main
+      options = parse_options(ARGV)
+    end
+
+    def self.parse_options(args)
+      options = Options.new(count: 60, duration: 60, source: '~/Music/iTunes/iTunes Media/Music')
+      opt_parser = OptionParser.new do |opts|
+        opts.banner = "Usage: #{$PROGRAM_NAME} [options]"
+        opts.separator('')
+        opts.separator('OPTIONS')
+
+        opts.on('-c', '--count NUMBER', Integer,
+                'Number of songs in the power hour') do |val|
+          options.count = val
+        end
+        opts.on('-d', '--duration SECONDS', Integer,
+                'Duration to play each song in seconds') do |val|
+          options.duration = val
+        end
+        opts.on('-s', '--source DIR', 'Scan DIR for music files') do |val|
+          options.source = val
+        end
+        opts.on('-h', '--help', 'Display this screen') do
+          puts opts
+          puts "\nDEFAULTS"
+          options.each_pair do |option, default|
+            puts "    #{option}: #{default}"
+          end
+          exit
+        end
+      end
+      opt_parser.parse!(args)
+      options
+    end
+  end
+
   # This is the only exposed method in the Powerhour module
   # This method parses command line options, sets up the game,
   # and accepts user input
   def self.run
     # setup before event loop
-    options = parse_options
-    song_list = build_file_list(options[:dir])
+    options = Runner.parse_options(ARGV)
+    song_list = build_file_list(options.source_path)
 
-    gui = Gui.new(options[:duration], options[:songs])
+    gui = Gui.new(options.duration, options.count)
     queue = Queue.new
 
-    ph = Game.new(options[:songs], options[:duration], song_list, gui, queue)
+    ph = Game.new(options.count, options.duration, song_list, gui, queue)
     ph.run
     Gui.init_screen do
       # loop while powerhour thread not terminated
@@ -49,32 +93,6 @@ module Powerhour
   BUSYWAIT = 0.1
   GETCH_TIMEOUT = 0.1
   MUSIC_FILETYPES = %w[mp3].freeze
-
-  # Parse options into a hash that is also populated with default values
-  def self.parse_options
-    options = { songs: 60, duration: 60, dir: '~/Music/iTunes/iTunes Media/Music' }
-    ARGV.options do |opts|
-      opts.banner = <<~BANNER
-        Usage: #{$PROGRAM_NAME} [options]
-
-        OPTIONS
-      BANNER
-      opts.on('-n', '--num-songs NUMBER', Integer, 'Number of songs in the power hour') { |val| options[:songs] = val }
-      opts.on('-d', '--duration SECONDS', Integer, 'Duration to play each song in seconds') { |val| options[:duration] = val }
-      opts.on('-D', '--directory DIR', 'Use DIR of music files') { |val| options[:dir] = val }
-      opts.on('-h', '--help', 'Display this screen') do
-        puts opts
-        puts "\nDEFAULTS"
-        options.each_pair do |option, default|
-          puts "    #{option}: #{default}"
-        end
-        exit
-      end
-      opts.parse!
-    end
-    options[:dir] = File.expand_path(options[:dir])
-    options
-  end
 
   # get all of the files in the supplied directory using glob
   def self.build_file_list(dir)

@@ -371,33 +371,31 @@ module Powerhour
         Curses.refresh
       end
 
-      def update_cursor(config)
-        @cursor.clear
-        @cursor << "Song #{config.cursor + 1} of #{config.iterations}"
+      def with(window)
+        window.clear
+        yield window
       ensure
-        @cursor.refresh
+        window.refresh
+      end
+
+      def update_cursor(config)
+        with(@cursor) { |window| window << "Song #{config.cursor + 1} of #{config.iterations}" }
       end
 
       def update_metadata(metadata)
-        @metadata.clear
-        @metadata << 'Now Playing:'
-        @metadata << "\n    #{metadata.title}"
-        @metadata << "\n    #{metadata.artist} -- #{metadata.album}"
-      ensure
-        @metadata.refresh
+        with(@metadata) do |window|
+          window << 'Now Playing:'
+          window << "\n    #{metadata.title}"
+          window << "\n    #{metadata.artist} -- #{metadata.album}"
+        end
       end
 
       def update_progress(config)
-        @progress.clear
         @song_bar = ProgressBar.new(total: config.duration, length: @cols) if @song_bar.nil?
         @game_bar = ProgressBar.new(total: config.game_duration, length: @cols) if @game_bar.nil?
-
         @song_bar.progress = config.position
         @game_bar.progress = config.elapsed
-        @progress << @song_bar.to_s
-        @progress << @game_bar.to_s
-      ensure
-        @progress.refresh
+        with(@progress) { |window| window << "#{@song_bar}#{@game_bar}" }
       end
 
       def beer

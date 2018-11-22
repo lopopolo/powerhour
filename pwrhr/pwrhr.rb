@@ -266,6 +266,7 @@ module Powerhour
       def init
         Curses.init_screen
         Curses.noecho
+        Curses.cbreak
         Curses.stdscr.keypad(true) # enable arrow keys
         Curses.curs_set(0)
         Curses.timeout = GETCH_TIMEOUT
@@ -314,10 +315,11 @@ module Powerhour
         Curses.clear
         # Static chrome
         write_line(0, 'Welcome to pwrhr, serving all of your power hour needs')
-        write_line(2, 'Now Playing:')
         write_line(@rows - 1, 'Enter q to quit, s to skip song, p to toggle play/pause')
         beer(5, 3)
         # Dynamic UI
+        @metadata&.close
+        @metadata = Curses.stdscr.derwin(3, @cols, 3, 0)
         update_metadata(state.metadata)
         update_cursor(state.config)
         update_elapsed(state.config)
@@ -331,8 +333,12 @@ module Powerhour
       end
 
       def update_metadata(metadata)
-        write_line(3, "    #{metadata.title}")
-        write_line(4, "    #{metadata.artist} -- #{metadata.title}")
+        @metadata.clear
+        @metadata << 'Now Playing:'
+        @metadata << "\n    #{metadata.title}"
+        @metadata << "\n    #{metadata.artist} -- #{metadata.album}"
+      ensure
+        @metadata.refresh
       end
 
       def update_elapsed(config)

@@ -26,23 +26,21 @@ module Powerhour
         position: 0
       )
 
-      playlist = Source.new(options.source_path).playlist
       ui = UI::TextInteractive.new
-      player = Player.new(playlist)
-      game = Game.new(config, player).start
+      game = Game.new(
+        config,
+        Player.new(Source.new(options.source_path).playlist)
+      ).start
 
       begin
         ui.init
-        shutdown_received = false
-        while game.active? && !shutdown_received
+        while game.active?
           ui.maybe_paint(game.state)
           ui.poll do |command|
             case command
-            when UI::Command::SKIP then player.advance
+            when UI::Command::SKIP then game.skip
             when UI::Command::TOGGLE then player.toggle
-            when UI::Command::QUIT
-              player.shutdown
-              shutdown_received = true
+            when UI::Command::QUIT then game.quit
             end
           end
         end
@@ -219,7 +217,22 @@ module Powerhour
     end
 
     def active?
+      return false unless @shutdown.nil?
+
       @props.active?
+    end
+
+    def skip
+      @player.advance
+    end
+
+    def toggle
+      @player.toggle
+    end
+
+    def quit
+      @player.shutdown
+      @shutdown = true
     end
   end
 

@@ -298,6 +298,7 @@ module Powerhour
         return paint(state) if @state.nil?
         return paint(state) unless @rows == Curses.lines && @cols == Curses.cols
 
+        clear unless state.metadata == @state.metadata
         update_metadata(state.metadata) unless state.metadata == @state.metadata
         update_cursor(state.config) unless state.config.cursor == @state.config.cursor
         update_elapsed(state.config) unless state.config.elapsed == @state.config.elapsed
@@ -308,6 +309,10 @@ module Powerhour
       end
 
       private
+
+      def clear
+        @song_bar.reset
+      end
 
       def paint(state)
         @rows = Curses.lines
@@ -329,7 +334,7 @@ module Powerhour
       end
 
       def update_cursor(config)
-        write(1, 0, "Song #{config.cursor + 1} of #{config.iterations}")
+        write_line(1, "Song #{config.cursor + 1} of #{config.iterations}")
       end
 
       def update_metadata(metadata)
@@ -341,9 +346,44 @@ module Powerhour
         @metadata.refresh
       end
 
+      class Bar
+        attr_writer :length, :progress
+
+        def initialize(total:, length:)
+          @total = total
+          @length = length
+          @progress = 0
+        end
+
+        def completed_frac
+          @progress.to_f / @total
+        end
+
+        def reset
+          @progress = 0
+        end
+
+        def to_s
+          duration = duration(@progress)
+          bar_length = @length - 2 - duration.length
+          complete = '=' * (bar_length * completed_frac).floor
+          incomplete = ' ' * (bar_length - complete.length)
+          "|#{complete}#{incomplete}|#{duration}"
+        end
+
+        def duration(seconds)
+          Time.at(seconds).utc.strftime('%H:%M:%S').delete_prefix('00:')
+        end
+      end
+
       def update_elapsed(config)
-        write_line(@rows - 3, progress(config.position, config.duration))
-        write_line(@rows - 2, progress(config.elapsed, config.game_duration))
+        @song_bar = Bar.new(total: config.duration, length: @cols) if @song_bar.nil?
+        @game_bar = Bar.new(total: config.game_duration, length: @cols) if @game_bar.nil?
+
+        @song_bar.progress = config.position
+        @game_bar.progress = config.elapsed
+        write_line(@rows - 3, @song_bar.to_s)
+        write_line(@rows - 2, @game_bar.to_s)
       end
 
       def beer(top_height, bottom_height)
@@ -366,22 +406,8 @@ module Powerhour
       end
 
       def clear_line(line)
-        blanks = ' ' * Curses.cols
+        blanks = ' ' * @cols
         write(line, 0, blanks)
-      end
-
-      def format_duration(seconds)
-        Time.at(seconds).utc.strftime('%H:%M:%S').delete_prefix('00:')
-      end
-
-      def progress(elapsed, duration)
-        percent = 1.0 * elapsed / duration
-        suffix = "[#{format_duration(elapsed)} elapsed / #{format_duration(duration)}]"
-        width = [Curses.cols - suffix.length - 2, 0].max
-        progress_width = [(percent * width).ceil, width].min
-        progress = '=' * progress_width
-        remaining = ' ' * [width - progress_width, 0].max
-        "|#{progress}#{remaining}|#{suffix}"
       end
     end
   end

@@ -301,7 +301,7 @@ module Powerhour
         clear unless state.metadata == @state.metadata
         update_metadata(state.metadata) unless state.metadata == @state.metadata
         update_cursor(state.config) unless state.config.cursor == @state.config.cursor
-        update_elapsed(state.config) unless state.config.elapsed == @state.config.elapsed
+        update_progress(state.config) unless state.config.elapsed == @state.config.elapsed
         nil
       ensure
         @state = state
@@ -318,23 +318,33 @@ module Powerhour
         @rows = Curses.lines
         @cols = Curses.cols
         Curses.clear
+
+        @beer&.close
+        @metadata&.close
+        @cursor&.close
+        @progress&.close
+
         # Static chrome
         write_line(0, 'Welcome to pwrhr, serving all of your power hour needs')
         write_line(@rows - 1, 'Enter q to quit, s to skip song, p to toggle play/pause')
         beer
         # Dynamic UI
-        @metadata&.close
         @metadata = Curses.stdscr.derwin(3, @cols, 3, 0)
         update_metadata(state.metadata)
+        @cursor = Curses.stdscr.derwin(1, @cols, 1, 0)
         update_cursor(state.config)
-        update_elapsed(state.config)
+        @progress = Curses.stdscr.derwin(2, @cols, @rows - 3, 0)
+        update_progress(state.config)
         nil
       ensure
         Curses.refresh
       end
 
       def update_cursor(config)
-        write_line(1, "Song #{config.cursor + 1} of #{config.iterations}")
+        @cursor.clear
+        @cursor << "Song #{config.cursor + 1} of #{config.iterations}"
+      ensure
+        @cursor.refresh
       end
 
       def update_metadata(metadata)
@@ -346,7 +356,7 @@ module Powerhour
         @metadata.refresh
       end
 
-      class Bar
+      class ProgressBar
         attr_writer :length, :progress
 
         def initialize(total:, length:)
@@ -376,18 +386,20 @@ module Powerhour
         end
       end
 
-      def update_elapsed(config)
-        @song_bar = Bar.new(total: config.duration, length: @cols) if @song_bar.nil?
-        @game_bar = Bar.new(total: config.game_duration, length: @cols) if @game_bar.nil?
+      def update_progress(config)
+        @progress.clear
+        @song_bar = ProgressBar.new(total: config.duration, length: @cols) if @song_bar.nil?
+        @game_bar = ProgressBar.new(total: config.game_duration, length: @cols) if @game_bar.nil?
 
         @song_bar.progress = config.position
         @game_bar.progress = config.elapsed
-        write_line(@rows - 3, @song_bar.to_s)
-        write_line(@rows - 2, @game_bar.to_s)
+        @progress << @song_bar.to_s
+        @progress << @game_bar.to_s
+      ensure
+        @progress.refresh
       end
 
       def beer
-        @beer&.close
         cx = @cols / 2
         cy = @rows / 2
         width = BEER.map { |row| row.first.length }.max
@@ -397,6 +409,8 @@ module Powerhour
         BEER.each do |ascii, color|
           @beer.attron(Curses.color_pair(color)) { @beer << ascii }
         end
+      ensure
+        @beer.refresh
       end
 
       def write(line, col, text, color = COLOR_NORMAL)

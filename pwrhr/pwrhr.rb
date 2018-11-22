@@ -19,28 +19,35 @@ module Powerhour
 
     def self.main
       options = parse_options(ARGV)
-      playlist = Source.new(options.source_path).playlist
-      gui = Gui.new(options.duration, options.count)
-      queue = Queue.new
+      config = GameProperties.new(
+        iterations: options.count,
+        cursor: 0,
+        duration: options.duration,
+        position: 0
+      )
 
-      game = Game.new(options.count, options.duration, playlist, gui, queue)
-      game.run
-      Gui.init_screen do
-        # loop while power hour thread not terminated
+      playlist = Source.new(options.source_path).playlist
+      ui = CursesUI.new
+      player = Player.new(playlist)
+      game = Game.new(config, player).start
+
+      begin
+        ui.init
         while game.active?
-          event =
-            case Curses.getch
-            when Curses::Key::RIGHT, 's', 'S'
-              EVENT_SKIP
-            when 'p', 'P'
-              EVENT_TOGGLE_PAUSE
-            when 'q', 'Q'
-              EVENT_QUIT
-            else
-              EVENT_NOOP
-            end
-          queue << event if event != EVENT_NOOP
+          ui.maybe_paint(game.state)
+
+          case Curses.getch
+          when Curses::Key::RIGHT, 's', 'S'
+            player.advance
+          when 'p', 'P'
+            player.toggle
+          when 'q', 'Q'
+            player.shutdown
+            break
+          end
         end
+      ensure
+        ui.close
       end
     end
 
@@ -81,7 +88,6 @@ module Powerhour
   EVENT_TOGGLE_PAUSE = 'TOGGLE_PAUSE'
   EVENT_QUIT = 'QUIT'
   EVENT_NOOP = 'NOOP'
-  GETCH_TIMEOUT = 0.1
 
   class Source
     EXT = Set.new(%w[.mp3]).freeze
@@ -124,30 +130,15 @@ module Powerhour
     SHUTDOWN = 'shutdown-command'
     SKIP = 'skip-command'
 
-    attr_reader :queue
+    attr_reader :metadata
 
-    def initialize(playlist, gui)
+    def initialize(playlist)
       @playlist = playlist
-      @gui = gui
       @active = false
-      @queue = Queue.new
 
       @player = Audite.new
       @player.events.on(:toggle) do |state|
         @active = state
-      end
-
-      @command_thread = Thread.new do
-        while (command = @queue.pop)
-          case command
-          when Proc then command.call(@player)
-          when ADVANCE then advance
-          when SKIP then advance
-          when SHUTDOWN
-            shutdown
-            break
-          end
-        end
       end
     end
 
@@ -155,10 +146,14 @@ module Powerhour
       song = @playlist.pop
       File.open(song, 'rb') do |f|
         tags = ID3Tag.read(f)
-        @gui.song_info = SongInfo.new(tags.artist, tags.title, tags.album)
+        @metadata = SongMetadata.new(tags.artist, tags.title, tags.album)
       end
 
       @player.load(song.to_path)
+    end
+
+    def toggle
+      @player.toggle
     end
 
     def shutdown
@@ -172,11 +167,19 @@ module Powerhour
     def paused?
       !playing?
     end
+
+    def on(event, &blk)
+      @player.events.on(event, &blk)
+    end
   end
 
-  GameProperties = Struct.new(:iterations, :cursor, :duration, keyword_init: true) do
-    def elapsed(position)
+  GameProperties = Struct.new(:iterations, :cursor, :duration, :position, keyword_init: true) do
+    def elapsed
       cursor * duration + position
+    end
+
+    def game_duration
+      iterations * duration
     end
 
     def active?
@@ -184,69 +187,45 @@ module Powerhour
     end
   end
 
-  SongInfo = Struct.new(:artist, :title, :album)
+  SongMetadata = Struct.new(:artist, :title, :album)
+  UIState = Struct.new(:metadata, :config, keyword_init: true)
 
-  # This class encapsulates all of the game logic
-  # When to play a song, keeping track of the minute,
-  # which files are playable, etc.
   class Game
-    attr_accessor :num_songs, :duration
-    attr_accessor :playlist, :player
-    attr_accessor :gui, :queue
+    def initialize(props, player)
+      @props = props
+      @player = player
 
-    def initialize(num_songs, duration, playlist, gui, queue)
-      @props = GameProperties.new(iterations: num_songs, cursor: 0, duration: duration)
-      @gui = gui
-      @queue = queue
+      @player.on(:position_change) do |position|
+        @props.position = position
+      end
 
-      @player = Player.new(playlist, @gui)
-
-      @player.queue.push(lambda do |a|
-        a.events.on(:position_change) do |position|
-          @gui.elapsed_song_time = position
-          @gui.elapsed_session_time = @props.elapsed(position)
-          @gui.paint
-        end
-
-        a.events.on(:position_change) do |position|
-          player.queue.push(Player::ADVANCE) if position > @props.duration
-        end
-      end)
-    end
-
-    def run
-      @control_thread ||= Thread.new do
-        loop do
-          case @queue.pop
-          when EVENT_SKIP
-            @player.queue.push(Player::SKIP)
-          when EVENT_TOGGLE_PAUSE
-            @player.queue.push(->(a) { a.toggle })
-          when EVENT_QUIT
-            @player.queue.push(Player::SHUTDOWN)
-            @shutdown = true
-            break
-          when EVENT_NOOP
-            # noop
-            nil
-          else
-            $stderr.warn('Control thread received invalid event ... ignoring.')
-          end
+      @player.on(:position_change) do |position|
+        if position > @props.duration
+          @props.cursor += 1
+          @props.position = 0
+          @player.advance
         end
       end
-      @player.queue.push(Player::ADVANCE)
-      @player.queue.push(->(a) { a.toggle })
-      nil
+    end
+
+    def start
+      @player.advance
+      @player.toggle
+      self
+    end
+
+    def state
+      UIState.new(metadata: @player.metadata.clone, config: @props.clone)
     end
 
     def active?
-      return false if @shutdown
-
       @props.active?
     end
   end
 
-  class Gui
+  class CursesUI
+    GETCH_TIMEOUT = 0.1
+
     COLOR_BEER_TOP = 1
     COLOR_BEER_BOTTLE = 2
     COLOR_BEER_LABEL = 3
@@ -264,24 +243,7 @@ module Powerhour
       ["'---'", COLOR_BEER_BOTTLE]
     ].freeze
 
-    attr_accessor :song_info
-    attr_accessor :elapsed_session_time
-    attr_accessor :elapsed_song_time
-    attr_accessor :current_song
-
-    def initialize(song_duration, total_songs)
-      @session_duration = song_duration * total_songs
-      @song_duration = song_duration
-      @total_songs = total_songs
-      @current_song = nil
-      @song_info = SongInfo.new(nil, nil, nil)
-      @elapsed_song_time = 0
-      @elapsed_session_time = 0
-    end
-
-    # setup the gui
-    # pass in a code block that contains the event loop
-    def self.init_screen
+    def init
       Curses.init_screen
       Curses.noecho
       Curses.stdscr.keypad(true) # enable arrow keys
@@ -293,96 +255,97 @@ module Powerhour
       Curses.init_pair(COLOR_BEER_BOTTLE, Curses::COLOR_YELLOW, -1)
       Curses.init_pair(COLOR_BEER_LABEL, Curses::COLOR_RED, -1)
       Curses.init_pair(COLOR_NORMAL, -1, -1)
-      begin
-        yield
-      ensure
-        Curses.close_screen
-        Curses.curs_set(1)
-      end
     end
 
-    def paint
-      @cols = Curses.cols
-      @rows = Curses.lines
-      Curses.clear
-      top_height = 0
-      bottom_height = 0
-      top_height += paint_banner
-      top_height += paint_song_counter
-      top_height += paint_now_playing
-      bottom_height += paint_elapsed_time_bars
-      bottom_height += paint_footer
-      paint_beer(top_height, bottom_height)
+    def close
+      Curses.close_screen
+      Curses.curs_set(1)
+    end
+
+    def maybe_paint(state)
+      return paint(state) if @rows.nil? || @cols.nil?
+      return paint(state) if @state.nil?
+      return paint(state) unless @rows == Curses.lines && @cols == Curses.cols
+
+      update_metadata(state.metadata) unless state.metadata == @state.metadata
+      update_cursor(state.config) unless state.config.cursor == @state.config.cursor
+      update_elapsed(state.config) unless state.config.elapsed == @state.config.elapsed
+      nil
+    ensure
+      @state = state
       Curses.refresh
     end
 
     private
 
-    def paint_banner
-      write(0, 0, 'Welcome to pwrhr, serving all of your power hour needs')
-      1
+    def paint(state)
+      @rows = Curses.lines
+      @cols = Curses.cols
+      Curses.clear
+      # Static chrome
+      write_line(0, 'Welcome to pwrhr, serving all of your power hour needs')
+      write_line(2, 'Now Playing:')
+      write_line(@rows - 1, 'Enter q to quit, s to skip song, p to toggle play/pause')
+      beer(5, 3)
+      # Dynamic UI
+      update_metadata(state.metadata)
+      update_cursor(state.config)
+      update_elapsed(state.config)
+      nil
+    ensure
+      Curses.refresh
     end
 
-    def paint_song_counter
-      write(1, 0, "Song #{@current_song} of #{@total_songs}") unless @current_song.nil? || @total_songs.nil?
-      1
+    def update_cursor(config)
+      write(1, 0, "Song #{config.cursor + 1} of #{config.iterations}")
     end
 
-    def paint_now_playing
-      write(2, 0, 'Now Playing:')
-      unless @song_info.nil?
-        write(3, 4, @song_info.title) unless @song_info.title.nil?
-        write(4, 4, "#{@song_info.artist} -- #{@song_info.album}") unless @song_info.artist.nil? || @song_info.album.nil?
-      end
-      3
+    def update_metadata(metadata)
+      write_line(3, "    #{metadata.title}")
+      write_line(4, "    #{metadata.artist} -- #{metadata.title}")
     end
 
-    def paint_elapsed_time_bars
-      progress(@elapsed_song_time, @song_duration, @rows - 3)
-      progress(@elapsed_session_time, @session_duration, @rows - 2)
-      2
+    def update_elapsed(config)
+      write_line(@rows - 3, progress(config.position, config.duration))
+      write_line(@rows - 2, progress(config.elapsed, config.game_duration))
     end
 
-    def paint_footer
-      write(@rows - 1, 0, 'Enter q to quit, s to skip song, p to toggle play/pause')
-      1
-    end
-
-    def paint_beer(top_height, bottom_height)
+    def beer(top_height, bottom_height)
       avail_height = @rows - top_height - bottom_height
       line = (avail_height - BEER.size) / 2 + top_height
-      BEER.each_with_index do |ascii, index|
-        ascii, color = *ascii
+      BEER.each_with_index do |(ascii, color), index|
         write_col = (@cols - ascii.length) / 2
         write(line + index, write_col, ascii, color)
       end
     end
 
-    # A raw write method to the curses display.
-    # Always refresh the display after a write.
     def write(line, col, text, color = COLOR_NORMAL)
       Curses.setpos(line, col)
       Curses.attron(Curses.color_pair(color)) { Curses.addstr(text) }
     end
 
-    # helper method for formatting time elapsed
-    def format_time(seconds)
+    def write_line(line, text, color = COLOR_NORMAL)
+      clear_line(line)
+      write(line, 0, text, color)
+    end
+
+    def clear_line(line)
+      blanks = ' ' * Curses.cols
+      write(line, 0, blanks)
+    end
+
+    def format_duration(seconds)
       Time.at(seconds).utc.strftime('%H:%M:%S').delete_prefix('00:')
     end
 
-    # write a progress bar to the screen
-    def progress(elapsed, duration, output_line)
-      return if elapsed.nil? || duration.nil?
-
-      progress_bar = +''
+    def progress(elapsed, duration)
       percent = 1.0 * elapsed / duration
-      suffix = "[#{format_time elapsed} elapsed / #{format_time duration}]"
-      progress_bar_width = [@cols - suffix.length - 2, 0].max
-      filled_in_width = [(percent * progress_bar_width).ceil, progress_bar_width].min
-      progress_bar << '=' * filled_in_width
-      progress_bar << ' ' * [(progress_bar_width - filled_in_width), 0].max
-      progress_bar = "|#{progress_bar}|#{suffix}"
-      write(output_line, 0, progress_bar)
+      suffix = "[#{format_duration(elapsed)} elapsed / #{format_duration(duration)}]"
+      width = [Curses.cols - suffix.length - 2, 0].max
+      progress_width = [(percent * width).ceil, width].min
+      progress = '=' * progress_width
+      remaining = ' ' * [width - progress_width, 0].max
+      "|#{progress}#{remaining}|#{suffix}"
     end
   end
 end

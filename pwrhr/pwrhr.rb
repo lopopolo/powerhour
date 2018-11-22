@@ -243,6 +243,36 @@ module Powerhour
       QUIT = 'quit'
     end
 
+    class ProgressBar
+      attr_writer :length, :progress
+
+      def initialize(total:, length:)
+        @total = total
+        @length = length
+        @progress = 0
+      end
+
+      def completed_frac
+        @progress.to_f / @total
+      end
+
+      def reset
+        @progress = 0
+      end
+
+      def to_s
+        duration = duration(@progress)
+        bar_length = @length - 2 - duration.length
+        complete = '=' * (bar_length * completed_frac).floor
+        incomplete = ' ' * (bar_length - complete.length)
+        "|#{complete}#{incomplete}|#{duration}"
+      end
+
+      def duration(seconds)
+        Time.at(seconds).utc.strftime('%H:%M:%S').delete_prefix('00:')
+      end
+    end
+
     class TextInteractive
       GETCH_TIMEOUT = 0.1
 
@@ -355,36 +385,6 @@ module Powerhour
         @metadata << "\n    #{metadata.artist} -- #{metadata.album}"
       ensure
         @metadata.refresh
-      end
-
-      class ProgressBar
-        attr_writer :length, :progress
-
-        def initialize(total:, length:)
-          @total = total
-          @length = length
-          @progress = 0
-        end
-
-        def completed_frac
-          @progress.to_f / @total
-        end
-
-        def reset
-          @progress = 0
-        end
-
-        def to_s
-          duration = duration(@progress)
-          bar_length = @length - 2 - duration.length
-          complete = '=' * (bar_length * completed_frac).floor
-          incomplete = ' ' * (bar_length - complete.length)
-          "|#{complete}#{incomplete}|#{duration}"
-        end
-
-        def duration(seconds)
-          Time.at(seconds).utc.strftime('%H:%M:%S').delete_prefix('00:')
-        end
       end
 
       def update_progress(config)

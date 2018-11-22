@@ -321,7 +321,7 @@ module Powerhour
         # Static chrome
         write_line(0, 'Welcome to pwrhr, serving all of your power hour needs')
         write_line(@rows - 1, 'Enter q to quit, s to skip song, p to toggle play/pause')
-        beer(5, 3)
+        beer
         # Dynamic UI
         @metadata&.close
         @metadata = Curses.stdscr.derwin(3, @cols, 3, 0)
@@ -386,12 +386,16 @@ module Powerhour
         write_line(@rows - 2, @game_bar.to_s)
       end
 
-      def beer(top_height, bottom_height)
-        avail_height = @rows - top_height - bottom_height
-        line = (avail_height - BEER.size) / 2 + top_height
-        BEER.each_with_index do |(ascii, color), index|
-          write_col = (@cols - ascii.length) / 2
-          write(line + index, write_col, ascii, color)
+      def beer
+        @beer&.close
+        cx = @cols / 2
+        cy = @rows / 2
+        width = BEER.map { |row| row.first.length }.max
+        height = BEER.length
+
+        @beer = Curses.stdscr.derwin(height, width, cy - height / 2, cx - width / 2)
+        BEER.each do |ascii, color|
+          @beer.attron(Curses.color_pair(color)) { @beer << ascii }
         end
       end
 

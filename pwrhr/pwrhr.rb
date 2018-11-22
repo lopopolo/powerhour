@@ -325,8 +325,9 @@ module Powerhour
         @progress&.close
 
         # Static chrome
-        write_line(0, 'Welcome to pwrhr, serving all of your power hour needs')
-        write_line(@rows - 1, 'Enter q to quit, s to skip song, p to toggle play/pause')
+        Curses.stdscr << 'Welcome to pwrhr, serving all of your power hour needs'
+        Curses.setpos(@rows - 1, 0)
+        Curses.stdscr << 'Enter q to quit, s to skip song, p to toggle play/pause'
         beer
         # Dynamic UI
         @metadata = Curses.stdscr.derwin(3, @cols, 3, 0)
@@ -411,21 +412,6 @@ module Powerhour
         end
       ensure
         @beer.refresh
-      end
-
-      def write(line, col, text, color = COLOR_NORMAL)
-        Curses.setpos(line, col)
-        Curses.attron(Curses.color_pair(color)) { Curses.addstr(text) }
-      end
-
-      def write_line(line, text, color = COLOR_NORMAL)
-        clear_line(line)
-        write(line, 0, text, color)
-      end
-
-      def clear_line(line)
-        blanks = ' ' * @cols
-        write(line, 0, blanks)
       end
     end
   end

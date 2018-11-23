@@ -393,6 +393,7 @@ module Powerhour
       def update_progress(config)
         @song_bar = ProgressBar.new(total: config.duration, length: @cols) if @song_bar.nil?
         @game_bar = ProgressBar.new(total: config.game_duration, length: @cols) if @game_bar.nil?
+        @song_bar.length = @game_bar.length = @cols
         @song_bar.progress = config.position
         @game_bar.progress = config.elapsed
         with(@progress) { |window| window << "#{@song_bar}#{@game_bar}" }

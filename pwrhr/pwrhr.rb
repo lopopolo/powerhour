@@ -310,7 +310,6 @@ module Powerhour
 
       def close
         Curses.close_screen
-        Curses.curs_set(1)
       end
 
       def poll

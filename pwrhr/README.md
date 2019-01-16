@@ -1,7 +1,7 @@
 # pwrhr.rb
 
-A small ruby script designed to run a power hour from the command line.
-It is decently configurable. These are the options `pwrhr.rb` supports:
+A small ruby script designed to run a power hour from the command line. It is
+decently configurable. These are the options `pwrhr.rb` supports:
 
 ```console
 $ ./pwrhr.rb -h
@@ -19,11 +19,11 @@ DEFAULTS
     source: ~/Music/iTunes/iTunes Media/Music
 ```
 
-By default, the macOS iTunes music folder is scanned for music files
-(mp3 only). You may supply an alternate directory via the `-s` switch.
+By default, the macOS iTunes music folder is scanned for music files (mp3 only).
+You may supply an alternate directory via the `-s` switch.
 
-To prevent your Mac from sleeping or turning off the display during a
-power hour, invoke pwrhr.rb like this:
+To prevent your Mac from sleeping or turning off the display during a power
+hour, invoke pwrhr.rb like this:
 
 ```bash
 caffeinate -i -d ./pwrhr.rb
